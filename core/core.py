@@ -18,6 +18,8 @@ from chromadb.config import Settings
 import pymupdf
 import time
 
+from .excel_analyzer import ExcelAnalyzer, format_excel_result
+
 @dataclass
 class QueryResult:
     answer: str
@@ -158,7 +160,14 @@ class KnowledgeBase:
         
         # 初始化 OCR 引擎（用于 Word 图片识别）
         self.ocr = None
-        
+
+        # 初始化 Excel 结构化分析器
+        self.excel_analyzer = ExcelAnalyzer(
+            llm_base_url=self.lmstudio_base_url,
+            llm_model=self.llm_model,
+            api_key=self.api_key
+        )
+
         print(f"[OK] 知识库 '{name}' 初始化完成")
         print(f"   - LLM: {self.llm_model}")
         print(f"   - Embedding: {self.embed_model}")
@@ -627,11 +636,21 @@ class KnowledgeBase:
         for filepath in to_index:
             # 根据文件类型加载
             text = self._load_document(filepath)
-            
+
+            # 对 Excel/CSV 文件额外保存 schema，用于结构化分析
+            ext = os.path.splitext(filepath)[1].lower()
+            if ext in ['.xlsx', '.xls', '.csv']:
+                try:
+                    sheets = self.excel_analyzer.load(filepath)
+                    self.excel_analyzer.save_schema(filepath, sheets)
+                    print(f"  [Excel] 已保存 schema：{os.path.basename(filepath)}")
+                except Exception as e:
+                    print(f"  [Warning] 保存 Excel schema 失败：{e}")
+
             if not text:
                 print(f"  [SKIP] {os.path.basename(filepath)} (无法读取)")
                 continue
-            
+
             chunks = self._split_text(text)
             for i, chunk in enumerate(chunks):
                 chunk_id = f"{filepath}_{i}"
@@ -808,6 +827,87 @@ class KnowledgeBase:
             print(f"[INFO] 简单问题，使用向量检索")
             return self.query_with_sources(question, top_k, auto_refresh, max_context_length=max_context_length)
     
+    def extract_data(self, question: str, fields: List[str] = None, top_k: int = 5, auto_refresh: bool = False) -> Dict[str, Any]:
+        """
+        从 Excel/CSV 文件中提取结构化数据
+
+        Args:
+            question: 用户问题，例如"2025 年销售额总和是多少？"
+            fields: 期望提取的字段列表（可选，目前作为辅助提示）
+            top_k: 检索相关文档数量
+            auto_refresh: 是否自动刷新索引
+
+        Returns:
+            分析结果字典
+        """
+        if auto_refresh:
+            self.add_documents()
+
+        # 1. 检索相关文档
+        query_embedding = self.embeddings.embed_query(question)
+        results = self.collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k
+        )
+
+        if not results['documents'] or not results['documents'][0]:
+            return {
+                'error': '未找到相关文档',
+                'answer': '未在知识库中找到相关 Excel/CSV 文件。'
+            }
+
+        # 2. 筛选出 Excel/CSV 文件路径
+        excel_files = []
+        seen = set()
+        for i, metadata in enumerate(results['metadatas'][0]):
+            filepath = metadata.get('filepath', '')
+            ext = os.path.splitext(filepath)[1].lower()
+            if ext in ['.xlsx', '.xls', '.csv'] and filepath not in seen:
+                excel_files.append(filepath)
+                seen.add(filepath)
+
+        if not excel_files:
+            return {
+                'error': '未找到 Excel/CSV 文件',
+                'answer': '检索到的文档不是 Excel/CSV 格式，无法执行结构化分析。'
+            }
+
+        # 3. 对第一个相关 Excel/CSV 文件执行分析
+        target_file = excel_files[0]
+        print(f"[Excel] 结构化分析文件：{os.path.basename(target_file)}")
+
+        try:
+            analysis_result = self.excel_analyzer.analyze(question, target_file)
+
+            # 4. 如果指定了 fields，尝试从结果中提取对应字段
+            if fields and 'data' in analysis_result:
+                extracted = []
+                for row in analysis_result['data']:
+                    extracted_row = {}
+                    for field in fields:
+                        # 模糊匹配字段名
+                        for key in row.keys():
+                            if field.lower() in str(key).lower() or str(key).lower() in field.lower():
+                                extracted_row[field] = row[key]
+                                break
+                    if extracted_row:
+                        extracted.append(extracted_row)
+                analysis_result['extracted_fields'] = extracted
+
+            # 5. 生成自然语言答案
+            answer = format_excel_result(analysis_result)
+            analysis_result['answer'] = answer
+
+            return analysis_result
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {
+                'error': f'分析失败：{str(e)}',
+                'answer': f'Excel 结构化分析失败：{str(e)}'
+            }
+
     def query_hybrid(self, question: str, top_k: int = 5, auto_refresh: bool = False, alpha: float = 0.5, max_context_length: int = 8000) -> QueryResult:
         """
         混合检索查询 - 向量 + 关键词

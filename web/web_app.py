@@ -168,6 +168,43 @@ def api_refresh():
             'error': str(e)
         }), 500
 
+@app.route('/api/extract', methods=['POST'])
+def api_extract():
+    """从 Excel/CSV 文件中提取结构化数据"""
+    try:
+        data = request.json or {}
+        question = data.get('question', '')
+        fields = data.get('fields', [])
+        top_k = data.get('top_k', 5)
+
+        if not question:
+            return jsonify({
+                'success': False,
+                'error': '问题不能为空'
+            }), 400
+
+        kb = get_kb()
+        result = kb.extract_data(question, fields=fields, top_k=top_k)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'answer': result.get('answer', ''),
+                'operation': result.get('operation', ''),
+                'sheet_name': result.get('sheet_name', ''),
+                'row_count': result.get('row_count', 0),
+                'value': result.get('value'),
+                'data': result.get('data', []),
+                'extracted_fields': result.get('extracted_fields', []),
+                'error': result.get('error')
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/init', methods=['POST'])
 def api_init():
     """初始化知识库索引（强制重建）"""

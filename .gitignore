@@ -24,6 +24,7 @@ logs/
 
 # Runtime config with secrets
 config/.env
+installer/**/config/.env
 config/config.yaml
 
 # Vector database cache

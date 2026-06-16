@@ -146,32 +146,40 @@ def rag_refresh(kb_name: str = "default", force: bool = False, auto_ocr: bool = 
 
 def rag_extract(question: str, fields: List[str], kb_name: str = "default") -> str:
     """
-    从文档中提取结构化数据
-    
+    从 Excel/CSV 文档中提取结构化数据
+
     Args:
-        question: 问题描述
-        fields: 要提取的字段列表
+        question: 问题描述，例如"2025年销售额总和是多少？"
+        fields: 要提取的字段列表（可选提示）
         kb_name: 知识库名称
-    
+
     Returns:
         格式化的提取结果
     """
     try:
         kb = _get_kb(kb_name)
-        data = kb.extract_data(question, fields)
-        
+        result = kb.extract_data(question, fields=fields)
+
+        if 'error' in result and not result.get('answer'):
+            return f"❌ 提取失败：{result['error']}"
+
         output = f"📊 **提取结果：**\n\n"
-        output += "| 字段 | 数值 |\n"
-        output += "|------|------|\n"
-        
-        for field in fields:
-            value = data.get(field, "未找到")
-            output += f"| {field} | {value} |\n"
-        
-        output += f"\n数据来源：{kb_name} 知识库"
-        
+        output += result.get('answer', '未找到相关数据')
+
+        # 如果指定了字段且有提取结果，显示字段表格
+        extracted = result.get('extracted_fields')
+        if fields and extracted:
+            output += "\n\n**字段提取：**\n"
+            output += "| " + " | ".join(fields) + " |\n"
+            output += "|" + "|".join(["------" for _ in fields]) + "|\n"
+            for row in extracted[:10]:
+                values = [str(row.get(f, "-")) for f in fields]
+                output += "| " + " | ".join(values) + " |\n"
+
+        output += f"\n\n数据来源：{kb_name} 知识库"
+
         return output
-    
+
     except Exception as e:
         return f"❌ 提取失败：{str(e)}"
 

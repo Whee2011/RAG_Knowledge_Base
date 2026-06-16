@@ -19,6 +19,7 @@
 - ✅ **Web 界面** - 浏览器操作界面
 - ✅ **CoPaw 技能** - 可直接在 CoPaw 中调用
 - ✅ **API Key 认证** - 支持 LM Studio API Key 认证
+- ✅ **Excel 结构化分析** - 支持对 Excel/CSV 进行聚合、筛选、排序等结构化查询
 
 ---
 
@@ -558,6 +559,48 @@ python web_app.py
 **方式二：使用完整安装包（推荐普通用户）**
 
 如果你需要完整的一键安装体验（含嵌入式 Python 和离线依赖包），请使用项目打包后的安装程序，而不是直接从 GitHub 源码运行。
+
+### Excel 结构化分析 API
+
+系统支持对上传的 Excel/CSV 文件进行结构化查询，例如：
+
+| 问题类型 | 示例 |
+|---------|------|
+| 聚合统计 | "2025 年销售额总和是多少？" |
+| 筛选查询 | "列出华东区的销售记录" |
+| 排序 TopN | "销售额最高的前 5 条记录" |
+| 分组统计 | "按地区统计销售额" |
+
+**Web API 调用示例：**
+
+```bash
+POST /api/extract
+Content-Type: application/json
+
+{
+  "question": "2025 年销售额总和是多少？",
+  "fields": ["年份", "销售额"],
+  "top_k": 5
+}
+```
+
+**Python API 调用示例：**
+
+```python
+from core import KnowledgeBase
+
+kb = KnowledgeBase()
+result = kb.extract_data("2025 年销售额总和是多少？", fields=["年份", "销售额"])
+print(result['answer'])
+```
+
+**CoPaw 技能调用：**
+
+```
+提取知识库中 2025 年销售额总和
+```
+
+> **注意：** Excel 结构化分析依赖 pandas，并需要 LM Studio 生成分析计划。首次分析某个 Excel 文件时，系统会自动保存其 schema。
 
 ### 安装包制作
 
