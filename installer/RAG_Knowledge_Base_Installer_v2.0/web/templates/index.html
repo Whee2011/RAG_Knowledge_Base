@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG-Local 知识库管理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        .stat-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            background: #f0f0f0;
+            border-color: #764ba2;
+        }
+        
+        .upload-area.dragover {
+            background: #e8f0fe;
+            border-color: #4285f4;
+        }
+        
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+        
+        .query-section {
+            margin-top: 20px;
+        }
+        
+        .query-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .query-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .result-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .result-answer {
+            font-size: 1.1em;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        .result-sources {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .result-sources h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .source-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: #f0f0f0;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+        
+        .file-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .file-item:hover {
+            background: #e8f0fe;
+            transform: translateX(5px);
+        }
+        
+        .file-info {
+            flex: 1;
+        }
+        
+        .file-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .file-meta {
+            font-size: 0.85em;
+            color: #666;
+        }
+        
+        .file-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 5px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .type-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        
+        .type-pdf { background: #ffebee; color: #c62828; }
+        .type-docx { background: #e3f2fd; color: #1565c0; }
+        .type-xlsx { background: #e8f5e9; color: #2e7d32; }
+        .type-txt { background: #fff3e0; color: #ef6c00; }
+        .type-pptx { background: #fce4ec; color: #c2185b; }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        /* Excel 分析表格样式 */
+        .excel-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 0.9em;
+        }
+        .excel-table th {
+            background: #667eea;
+            color: white;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: bold;
+        }
+        .excel-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .excel-table tr:hover { background: #f5f5ff; }
+        .excel-table .diff-up { color: #c62828; font-weight: bold; }
+        .excel-table .diff-down { color: #2e7d32; font-weight: bold; }
+        .excel-table .highlight-row { background: #fff9c4; }
+        
+        .tab-nav {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .tab-btn {
+            padding: 10px 25px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 1em;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        .tab-btn.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: bold;
+        }
+        .tab-btn:hover { color: #667eea; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .config-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.9em;
+            transition: border 0.3s;
+        }
+        .config-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .model-chip {
+            display: inline-block;
+            padding: 5px 12px;
+            margin: 3px;
+            background: #e8f0fe;
+            color: #1565c0;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+        .model-chip:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+                <img src="/static/RAG-Local.png" alt="Logo" style="height: 60px; width: auto;">
+                <h1>RAG-Local 知识库管理系统</h1>
+            </div>
+            <p>智能文档检索 · 自动 OCR · 语义问答</p>
+        </div>
+        
+        <!-- 统计面板 -->
+        <div class="dashboard">
+            <div class="card">
+                <h2>📊 知识库状态</h2>
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="docCount">-</div>
+                        <div class="stat-label">文档数量</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="chunkCount">-</div>
+                        <div class="stat-label">文本块数</div>
+                    </div>
+                </div>
+                <div style="margin-top: 20px; text-align: center; color: #666;">
+                    <small>最后更新：<span id="lastUpdate">-</span></small>
+                </div>
+                <div style="margin-top: 15px; text-align: center;">
+                    <button class="btn" onclick="refreshIndex()">🔄 刷新索引</button>
+                    <button class="btn btn-warning" onclick="loadFiles()">📁 查看文件</button>
+                </div>
+                <div class="progress-bar" id="refreshProgress">
+                    <div class="progress-bar-fill" id="refreshProgressFill"></div>
+                </div>
+            </div>
+            
+            <!-- 文件上传 -->
+            <div class="card">
+                <h2>📤 上传文件</h2>
+                <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                    <div class="upload-icon">📎</div>
+                    <p><strong>点击或拖拽文件到此处</strong></p>
+                    <p style="color: #999; margin-top: 10px; font-size: 0.9em;">
+                        支持：PDF, Word, Excel, PPT, TXT, Markdown
+                    </p>
+                </div>
+                <input type="file" id="fileInput" multiple onchange="handleFiles(this.files)">
+                <div id="uploadStatus"></div>
+            </div>
+            
+            <!-- 快捷操作 -->
+            <div class="card">
+                <h2>⚡ 快捷操作</h2>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button class="btn" onclick="document.getElementById('queryInput').focus()">❓ 提问</button>
+                    <button class="btn btn-success" onclick="refreshIndex()">🔄 刷新索引</button>
+                    <button class="btn btn-warning" onclick="loadFiles()">📁 文件管理</button>
+                    <button class="btn btn-danger" onclick="forceRefresh()">⚠️ 强制重建索引</button>
+                    <button class="btn btn-danger" onclick="showInitConfirm()" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);">🗑️ 初始化知识库</button>
+                </div>
+                <div class="alert alert-info" style="margin-top: 15px; display: block;">
+                    <strong>💡 提示：</strong><br>
+                    • 上传图片 PDF 会自动 OCR 识别<br>
+                    • Word 中的图片也会自动识别<br>
+                    • 索引刷新后立即可查询<br>
+                    • <strong>⚠️ 初始化将删除所有索引数据并重新扫描！</strong>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 查询区域 -->
+        <div class="card query-section">
+            <h2>❓ 智能问答</h2>
+            <textarea class="query-input" id="queryInput" placeholder="请输入您的问题，例如：&#10;• 中国的智能机器人型号是什么？&#10;• 文档中的职责分工是什么？&#10;• 2026 年 2 月的数据是多少？"></textarea>
+            <div style="text-align: center;">
+                <button class="btn" onclick="query()" id="queryBtn">🔍 查询知识库</button>
+                <select class="btn" id="topK" style="margin-left: 10px;">
+                    <option value="3">前 3 个结果</option>
+                    <option value="5" selected>前 5 个结果</option>
+                    <option value="10">前 10 个结果</option>
+                </select>
+            </div>
+            
+            <!-- 统计信息显示区域（查询前隐藏） -->
+            <div id="queryStats" style="display: none; margin-top: 15px;"></div>
+            
+            <div class="progress-bar" id="queryProgress">
+                <div class="progress-bar-fill" id="queryProgressFill"></div>
+            </div>
+            <div id="queryResult"></div>
+        </div>
+        
+        <!-- Excel 分析 -->
+        <div class="card query-section">
+            <h2>📊 Excel 数据分析</h2>
+            <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">
+                支持：单文件查询 · 多文件对比 · 跨月聚合 · 跨城市对比
+            </p>
+            <textarea class="query-input" id="excelQueryInput" placeholder="请输入分析问题，例如：&#10;• 石家庄2026年3月电费是多少？&#10;• 石家庄3月和2月电费变化如何？&#10;• 最近3个月石家庄电费总量是多少？&#10;• 石家庄和保定3月电费对比"></textarea>
+            <div style="text-align: center;">
+                <button class="btn" onclick="excelQuery()" id="excelQueryBtn">📊 分析数据</button>
+                <button class="btn btn-warning" onclick="loadExcelFiles()" style="margin-left: 10px;">📋 查看 Excel 文件</button>
+            </div>
+            <div class="progress-bar" id="excelProgress">
+                <div class="progress-bar-fill" id="excelProgressFill"></div>
+            </div>
+            <div id="excelResult"></div>
+            <div id="excelFilesList" style="display: none; margin-top: 20px;"></div>
+        </div>
+        
+        <!-- 文件列表 -->
+        <div class="card query-section">
+            <h2>📁 文件管理</h2>
+            <div id="fileList" class="file-list">
+                <p style="text-align: center; color: #999; padding: 40px;">
+                    点击"查看文件"按钮加载文件列表
+                </p>
+            </div>
+        </div>
+        
+        <!-- 模型配置 -->
+        <div class="card query-section">
+            <h2>⚙️ 模型配置</h2>
+            <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">
+                配置 LLM 和 Embedding 模型连接参数 · 测试连接 · 保存到 .env 文件
+            </p>
+            
+            <div style="border-left: 3px solid #667eea; padding-left: 15px; margin-bottom: 20px;">
+                <h3 style="color: #667eea; margin-bottom: 10px;">🔮 LLM 对话模型</h3>
+                <div style="display: grid; grid-template-columns: 1fr 3fr; gap: 8px; align-items: center;">
+                    <label style="text-align: right; color: #333; font-size: 0.9em;">服务器地址</label>
+                    <input class="config-input" id="cfgLlmUrl" placeholder="http://127.0.0.1:1234">
+                    
+                    <label style="text-align: right; color: #333; font-size: 0.9em;">模型名称</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input class="config-input" id="cfgLlmModel" placeholder="qwen/qwen3.5-9b" style="flex:1">
+                        <button class="btn" onclick="selectModel('llm')" style="padding: 5px 12px; font-size: 0.8em; white-space: nowrap;">📋 选择</button>
+                    </div>
+                    
+                    <label style="text-align: right; color: #333; font-size: 0.9em;">API Key</label>
+                    <input class="config-input" id="cfgLlmKey" placeholder="LM Studio 本地运行可留空" type="password">
+                </div>
+            </div>
+            
+            <div style="border-left: 3px solid #28a745; padding-left: 15px; margin-bottom: 20px;">
+                <h3 style="color: #28a745; margin-bottom: 10px;">🧩 Embedding 嵌入模型</h3>
+                <div style="display: grid; grid-template-columns: 1fr 3fr; gap: 8px; align-items: center;">
+                    <label style="text-align: right; color: #333; font-size: 0.9em;">服务器地址</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input class="config-input" id="cfgEmbUrl" placeholder="http://127.0.0.1:1234" style="flex:1">
+                        <button class="btn btn-warning" onclick="copyLlmUrl()" style="padding: 5px 12px; font-size: 0.8em; white-space: nowrap;">同 LLM</button>
+                    </div>
+                    
+                    <label style="text-align: right; color: #333; font-size: 0.9em;">模型名称</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input class="config-input" id="cfgEmbModel" placeholder="text-embedding-qwen3-embedding-4b" style="flex:1">
+                        <button class="btn" onclick="selectModel('emb')" style="padding: 5px 12px; font-size: 0.8em; white-space: nowrap;">📋 选择</button>
+                    </div>
+                    
+                    <label style="text-align: right; color: #333; font-size: 0.9em;">API Key</label>
+                    <input class="config-input" id="cfgEmbKey" placeholder="LM Studio 本地运行可留空" type="password">
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin: 15px 0;">
+                <button class="btn btn-success" onclick="testConnection()" id="testConnectionBtn">🔍 测试连接</button>
+                <button class="btn" onclick="saveConfig()" id="saveConfigBtn">💾 保存配置</button>
+            </div>
+            
+            <div class="progress-bar" id="configProgress">
+                <div class="progress-bar-fill" id="configProgressFill"></div>
+            </div>
+            <div id="configResult"></div>
+            <div id="modelSelectDialog" style="display: none; margin-top: 15px; background: #f8f9fa; padding: 15px; border-radius: 8px;"></div>
+        </div>
+    </div>
+    
+    <script>
+        // API 基础地址
+        const API_BASE = '';
+        
+        // 页面加载时获取状态
+        window.onload = function() {
+            loadStatus();
+            setupDragDrop();
+        };
+        
+        // 加载知识库状态
+        async function loadStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/status`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('docCount').textContent = data.data.total_documents;
+                    document.getElementById('chunkCount').textContent = data.data.total_chunks;
+                    document.getElementById('lastUpdate').textContent = data.data.last_updated || '从未';
+                }
+            } catch (error) {
+                console.error('加载状态失败:', error);
+            }
+        }
+        
+        // 刷新索引
+        async function refreshIndex(force = false) {
+            const progress = document.getElementById('refreshProgress');
+            const progressFill = document.getElementById('refreshProgressFill');
+            
+            progress.style.display = 'block';
+            progressFill.style.width = '30%';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/refresh`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ force: force, auto_ocr: true })
+                });
+                
+                const data = await response.json();
+                progressFill.style.width = '100%';
+                
+                if (data.success) {
+                    showAlert('索引刷新成功！', 'success');
+                    loadStatus();
+                } else {
+                    showAlert('刷新失败：' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('请求失败：' + error, 'error');
+            } finally {
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                    progressFill.style.width = '0%';
+                }, 1000);
+            }
+        }
+        
+        // 强制重建索引
+        function forceRefresh() {
+            if (confirm('⚠️ 确定要强制重建索引吗？\n\n这会删除现有索引并重新处理所有文档，可能需要较长时间。')) {
+                refreshIndex(true);
+            }
+        }
+        
+        // 显示初始化确认对话框
+        function showInitConfirm() {
+            const confirmed = confirm('⚠️⚠️⚠️ 警告：初始化知识库 ⚠️⚠️⚠️\n\n此操作将：\n1. 删除所有现有索引数据\n2. 重新扫描文档目录\n3. 完全重建知识库索引\n\n⚠️ 此操作不可逆，索引数据将被清除！\n\n确定要继续吗？');
+            if (confirmed) {
+                initKnowledgeBase();
+            }
+        }
+        
+        // 初始化知识库
+        async function initKnowledgeBase() {
+            const progress = document.getElementById('refreshProgress');
+            const progressFill = document.getElementById('refreshProgressFill');
+            
+            progress.style.display = 'block';
+            progressFill.style.width = '30%';
+            
+            showAlert('正在初始化知识库，请稍候...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/init`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ auto_ocr: true })
+                });
+                
+                const data = await response.json();
+                progressFill.style.width = '100%';
+                
+                if (data.success) {
+                    showAlert('✅ 知识库初始化成功！\n文档数：' + data.data.total_documents + '\n文本块数：' + data.data.total_chunks, 'success');
+                    loadStatus();
+                } else {
+                    showAlert('初始化失败：' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('请求失败：' + error, 'error');
+            } finally {
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                    progressFill.style.width = '0%';
+                }, 2000);
+            }
+        }
+        
+        // 查询知识库
+        async function query() {
+            const question = document.getElementById('queryInput').value.trim();
+            const topK = document.getElementById('topK').value;
+            
+            if (!question) {
+                showAlert('请输入问题', 'error');
+                return;
+            }
+            
+            const progress = document.getElementById('queryProgress');
+            const progressFill = document.getElementById('queryProgressFill');
+            const queryBtn = document.getElementById('queryBtn');
+            
+            progress.style.display = 'block';
+            progressFill.style.width = '30%';
+            queryBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/query`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ question: question, top_k: parseInt(topK) })
+                });
+                
+                const data = await response.json();
+                progressFill.style.width = '100%';
+                
+                if (data.success) {
+                    displayResult(data.data);
+                } else {
+                    showAlert('查询失败：' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('请求失败：' + error, 'error');
+            } finally {
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                    progressFill.style.width = '0%';
+                    queryBtn.disabled = false;
+                }, 1000);
+            }
+        }
+        
+        // 显示查询结果
+        function displayResult(data) {
+            const resultDiv = document.getElementById('queryResult');
+            const statsDiv = document.getElementById('queryStats');
+            
+            // 累计 token（localStorage 存储）
+            let cumulativeTokens = parseInt(localStorage.getItem('rag_cumulativeTokens') || '0');
+            cumulativeTokens += data.total_tokens || 0;
+            localStorage.setItem('rag_cumulativeTokens', cumulativeTokens);
+            
+            // ✅ 显示统计信息到独立区域
+            statsDiv.innerHTML = `
+                <div class="result-stats" style="
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 10px;
+                    padding: 15px;
+                    margin: 15px 0;
+                    border-left: 4px solid #5a67d8;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                ">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <div class="stat-item">
+                            <div style="font-size: 12px; color: rgba(255, 255, 255, 0.9); margin-bottom: 5px;">⏱️ 耗时</div>
+                            <div style="font-size: 18px; font-weight: bold; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">${data.query_time || 0} 秒</div>
+                        </div>
+                        <div class="stat-item">
+                            <div style="font-size: 12px; color: rgba(255, 255, 255, 0.9); margin-bottom: 5px;">📊 本次 Token</div>
+                            <div style="font-size: 18px; font-weight: bold; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">${data.total_tokens || 0}</div>
+                            <div style="font-size: 11px; color: rgba(255, 255, 255, 0.8);">提示：${data.prompt_tokens || 0} | 生成：${data.completion_tokens || 0}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div style="font-size: 12px; color: rgba(255, 255, 255, 0.9); margin-bottom: 5px;">📈 累计 Token</div>
+                            <div style="font-size: 18px; font-weight: bold; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">${cumulativeTokens.toLocaleString()}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            statsDiv.style.display = 'block';
+            
+            // 显示答案和来源
+            let html = `
+                <div class="result-box">
+                    <div class="result-answer">
+                        <strong>📝 答案：</strong><br><br>
+                        ${formatAnswer(data.answer)}
+                    </div>
+            `;
+            
+            if (data.sources && data.sources.length > 0) {
+                html += `
+                    <div class="result-sources">
+                        <h4>📄 来源文档：</h4>
+                `;
+                
+                // 去重
+                const seen = new Set();
+                data.sources.forEach(source => {
+                    const key = source.source;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        html += `
+                            <div class="source-item">
+                                <strong>[${source.index}]</strong> ${source.source}
+                            </div>
+                        `;
+                    }
+                });
+                
+                html += `</div>`;
+            }
+            
+            html += `</div>`;
+            resultDiv.innerHTML = html;
+        }
+        
+        // 格式化答案（处理换行和移除 think 标签）
+        function formatAnswer(text) {
+            // 移除 <think> 标签（qwen3.5 thinking 模式）
+            // 注意：使用字符串方式避免 HTML 解析问题
+            var thinkStart = text.indexOf('<think>');
+            var thinkEnd = text.indexOf('</think>');
+            if (thinkStart !== -1 && thinkEnd !== -1) {
+                text = text.substring(0, thinkStart) + text.substring(thinkEnd + 9);
+            }
+            // 处理换行
+            return text.replace(/\n/g, '<br>');
+        }
+        
+        // 加载文件列表
+        async function loadFiles() {
+            const fileListDiv = document.getElementById('fileList');
+            fileListDiv.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">加载中...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/files`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayFiles(data.data);
+                } else {
+                    fileListDiv.innerHTML = '<p style="text-align: center; color: red;">加载失败：' + data.error + '</p>';
+                }
+            } catch (error) {
+                fileListDiv.innerHTML = '<p style="text-align: center; color: red;">加载失败：' + error + '</p>';
+            }
+        }
+        
+        // 显示文件列表
+        function displayFiles(files) {
+            const fileListDiv = document.getElementById('fileList');
+            
+            if (files.length === 0) {
+                fileListDiv.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">暂无文件</p>';
+                return;
+            }
+            
+            let html = '';
+            files.forEach(file => {
+                const typeClass = `type-${file.type}`;
+                const size = formatFileSize(file.size);
+                
+                html += `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-name">
+                                <span class="type-badge ${typeClass}">${file.type.toUpperCase()}</span>
+                                ${file.name}
+                            </div>
+                            <div class="file-meta">
+                                📂 ${file.path} · 💾 ${size} · 🕐 ${file.modified}
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            ${file.type === 'pdf' ? `<button class="btn btn-warning" onclick="ocrFile('${file.path}')" style="padding: 5px 10px; font-size: 0.8em;">🔍 OCR</button>` : ''}
+                            <button class="btn btn-danger" onclick="deleteFile('${file.path}')" style="padding: 5px 10px; font-size: 0.8em;">🗑️ 删除</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            fileListDiv.innerHTML = html;
+        }
+        
+        // 删除文件
+        async function deleteFile(path) {
+            if (!confirm(`确定要删除文件吗？\n\n${path}`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/delete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ path: path })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('文件已删除', 'success');
+                    loadFiles();
+                    loadStatus();
+                } else {
+                    showAlert('删除失败：' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('请求失败：' + error, 'error');
+            }
+        }
+        
+        // OCR 文件
+        async function ocrFile(path) {
+            try {
+                const response = await fetch(`${API_BASE}/api/ocr/${encodeURIComponent(path)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                } else {
+                    showAlert('OCR 失败：' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('请求失败：' + error, 'error');
+            }
+        }
+        
+        // 处理文件上传
+        function handleFiles(files) {
+            Array.from(files).forEach(uploadFile);
+        }
+        
+        // 上传单个文件
+        async function uploadFile(file) {
+            const statusDiv = document.getElementById('uploadStatus');
+            statusDiv.innerHTML = `<div class="alert alert-info" style="display: block;">正在上传：${file.name}...</div>`;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-success" style="display: block;">
+                            ✅ ${data.message}<br>
+                            <small>大小：${formatFileSize(data.data.size)}</small>
+                        </div>
+                    `;
+                    loadStatus();
+                    loadFiles();
+                } else {
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-error" style="display: block;">
+                            ❌ 上传失败：${data.error}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <div class="alert alert-error" style="display: block;">
+                        ❌ 上传失败：${error}
+                    </div>
+                `;
+            }
+        }
+        
+        // 设置拖拽上传
+        function setupDragDrop() {
+            const uploadArea = document.getElementById('uploadArea');
+            
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+        }
+        
+        // 显示提示消息
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.style.display = 'block';
+            alertDiv.textContent = message;
+            
+            document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.container').firstChild);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+        
+        // 支持 Enter 键查询
+        document.getElementById('queryInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                query();
+            }
+        });
+        
+        // 支持 Excel 输入框 Enter 键
+        document.getElementById('excelQueryInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                excelQuery();
+            }
+        });
+        
+        // Excel 数据分析
+        async function excelQuery() {
+            const question = document.getElementById('excelQueryInput').value.trim();
+            if (!question) {
+                showAlert('请输入分析问题', 'error');
+                return;
+            }
+            
+            const progress = document.getElementById('excelProgress');
+            const progressFill = document.getElementById('excelProgressFill');
+            const btn = document.getElementById('excelQueryBtn');
+            const resultDiv = document.getElementById('excelResult');
+            
+            progress.style.display = 'block';
+            progressFill.style.width = '30%';
+            btn.disabled = true;
+            resultDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/excel/query`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question })
+                });
+                
+                const data = await response.json();
+                progressFill.style.width = '100%';
+                
+                if (data.success) {
+                    displayExcelResult(data.data);
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-error" style="display: block; margin-top: 15px;">
+                            ❌ ${data.error}
+                        </div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-error" style="display: block; margin-top: 15px;">
+                        ❌ 请求失败：${error}
+                    </div>`;
+            } finally {
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                    progressFill.style.width = '0%';
+                    btn.disabled = false;
+                }, 1000);
+            }
+        }
+        
+        function displayExcelResult(data) {
+            const resultDiv = document.getElementById('excelResult');
+            let html = '';
+            
+            html += `<div class="result-box" style="margin-top: 15px;">
+                <div class="result-answer">${formatAnswer(data.answer)}</div>`;
+            
+            if (data.files_used && data.files_used.length > 0) {
+                html += `<p style="color: #999; font-size: 0.85em; margin-top: 10px;">📂 涉及文件：${data.files_used.join(', ')}</p>`;
+            }
+            
+            const rd = data.result_data;
+            if (rd) {
+                html += '<div class="result-sources"><h4>📊 数据详情</h4>';
+                
+                if (rd.type === 'compare' || rd.type === 'cross_compare') {
+                    html += buildComparisonTable(rd);
+                } else if (rd.type === 'aggregate') {
+                    html += buildAggregateView(rd);
+                } else if (rd.type === 'single' && rd.data) {
+                    html += buildDataTable(rd.columns, rd.data);
+                }
+                
+                html += '</div>';
+            }
+            
+            html += '</div>';
+            resultDiv.innerHTML = html;
+        }
+        
+        function buildComparisonTable(rd) {
+            let html = '<table class="excel-table"><tr><th>指标</th>';
+            if (rd.type === 'cross_compare') {
+                html += `<th>${rd.city1}</th><th>${rd.city2}</th><th>差异</th>`;
+            } else {
+                html += `<th>${rd.date1}</th><th>${rd.date2}</th><th>变化</th><th>变化率</th>`;
+            }
+            html += '</tr>';
+            
+            rd.comparison.forEach(row => {
+                const diffClass = row.diff > 0 ? 'diff-up' : (row.diff < 0 ? 'diff-down' : '');
+                html += `<tr><td><strong>${row.column}</strong></td>`;
+                if (rd.type === 'cross_compare') {
+                    html += `<td>${row[rd.city1]}</td><td>${row[rd.city2]}</td>`;
+                } else {
+                    html += `<td>${row.value1}</td><td>${row.value2}</td>`;
+                }
+                html += `<td class="${diffClass}">${row.diff > 0 ? '+' : ''}${row.diff.toFixed(2)}</td>`;
+                if (rd.type !== 'cross_compare') {
+                    html += `<td class="${diffClass}">${row.rate !== null ? (row.rate > 0 ? '+' : '') + row.rate + '%' : '-'}</td>`;
+                }
+                html += '</tr>';
+            });
+            html += '</table>';
+            return html;
+        }
+        
+        function buildAggregateView(rd) {
+            let html = '<table class="excel-table"><tr><th>指标</th><th>总计</th><th>平均值</th><th>月份数</th></tr>';
+            for (const [col, stats] of Object.entries(rd.summary)) {
+                html += `<tr><td><strong>${col}</strong></td><td>${stats.total}</td><td>${stats.average}</td><td>${stats.count}</td></tr>`;
+                if (stats.monthly) {
+                    html += '<tr class="highlight-row"><td colspan="4">';
+                    stats.monthly.forEach(m => {
+                        html += `<span style="margin-right:15px;">📅 ${m.date}: ${m.value}</span>`;
+                    });
+                    html += '</td></tr>';
+                }
+            }
+            html += '</table>';
+            return html;
+        }
+        
+        function buildDataTable(columns, data) {
+            let html = '<table class="excel-table"><tr>';
+            columns.forEach(c => { html += `<th>${c}</th>`; });
+            html += '</tr>';
+            data.forEach(row => {
+                html += '<tr>';
+                columns.forEach(c => { html += `<td>${row[c] !== undefined ? row[c] : ''}</td>`; });
+                html += '</tr>';
+            });
+            html += '</table>';
+            return html;
+        }
+        
+        async function loadExcelFiles() {
+            const container = document.getElementById('excelFilesList');
+            container.style.display = 'block';
+            container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">加载中...</p>';
+            
+            try {
+                const kb = { _build_excel_index: null };
+                const response = await fetch(`${API_BASE}/api/files`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const excelFiles = data.data.filter(f => ['xlsx', 'xls', 'csv'].includes(f.type));
+                    if (excelFiles.length === 0) {
+                        container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">暂无 Excel 文件，请先上传</p>';
+                        return;
+                    }
+                    
+                    let html = '<h4 style="color: #667eea; margin-bottom: 10px;">📋 Excel 文件列表</h4>';
+                    excelFiles.forEach(file => {
+                        html += `<div class="file-item">
+                            <div class="file-info">
+                                <div class="file-name">
+                                    <span class="type-badge type-xlsx">${file.type.toUpperCase()}</span>
+                                    ${file.name}
+                                </div>
+                                <div class="file-meta">📂 ${file.path} · 💾 ${formatFileSize(file.size)} · 🕐 ${file.modified}</div>
+                            </div>
+                        </div>`;
+                    });
+                    container.innerHTML = html;
+                }
+            } catch (error) {
+                container.innerHTML = '<p style="color: red;">加载失败：' + error + '</p>';
+            }
+        }
+        
+        // ==================== 模型配置管理 ====================
+        
+        var cachedModels = [];
+        
+        window.onload = function() {
+            loadStatus();
+            setupDragDrop();
+            loadConfig();
+        };
+        
+        async function loadConfig() {
+            try {
+                const res = await fetch(`${API_BASE}/api/config/llm`);
+                const data = await res.json();
+                if (data.success) {
+                    var d = data.data;
+                    document.getElementById('cfgLlmUrl').value = d.llm_base_url || '';
+                    document.getElementById('cfgLlmModel').value = d.llm_model || '';
+                    document.getElementById('cfgLlmKey').value = d.has_llm_api_key ? '••••••••' : '';
+                    document.getElementById('cfgEmbUrl').value = d.embedding_base_url || '';
+                    document.getElementById('cfgEmbModel').value = d.embedding_model || '';
+                    document.getElementById('cfgEmbKey').value = d.has_embedding_api_key ? '••••••••' : '';
+                }
+            } catch (e) {
+                console.error('加载配置失败:', e);
+            }
+        }
+        
+        async function testConnection() {
+            var resultDiv = document.getElementById('configResult');
+            var progress = document.getElementById('configProgress');
+            var progressFill = document.getElementById('configProgressFill');
+            var btn = document.getElementById('testConnectionBtn');
+            
+            var llmUrl = document.getElementById('cfgLlmUrl').value.trim();
+            var llmKey = document.getElementById('cfgLlmKey').value.trim();
+            if (llmKey === '••••••••') llmKey = '';
+            
+            progress.style.display = 'block';
+            progressFill.style.width = '30%';
+            btn.disabled = true;
+            resultDiv.innerHTML = '';
+            
+            try {
+                var res = await fetch(`${API_BASE}/api/config/llm/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ llm_base_url: llmUrl, llm_api_key: llmKey })
+                });
+                var data = await res.json();
+                progressFill.style.width = '100%';
+                
+                if (data.success) {
+                    cachedModels = data.data.models || [];
+                    var modelHtml = '';
+                    cachedModels.forEach(function(m) {
+                        modelHtml += `<span class="model-chip" onclick="pickModel('${m}')">${m}</span>`;
+                    });
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success" style="display: block; margin-top: 15px;">
+                            ✅ ${data.data.message}<br>
+                            <small>服务器: ${data.data.url}</small>
+                            <div style="margin-top: 10px;">${modelHtml}</div>
+                        </div>`;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-error" style="display: block; margin-top: 15px;">
+                            ❌ ${data.error}
+                        </div>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-error" style="display: block; margin-top: 15px;">
+                        ❌ 连接失败: ${e}
+                    </div>`;
+            } finally {
+                setTimeout(function() {
+                    progress.style.display = 'none';
+                    progressFill.style.width = '0%';
+                    btn.disabled = false;
+                }, 1000);
+            }
+        }
+        
+        function pickModel(name) {
+            var llmModel = document.getElementById('cfgLlmModel');
+            var embModel = document.getElementById('cfgEmbModel');
+            var currentLlama = llmModel.value;
+            
+            if (!currentLlama || name.toLowerCase().includes('embed')) {
+                embModel.value = name;
+            } else {
+                llmModel.value = name;
+            }
+        }
+        
+        function selectModel(type) {
+            var llmUrl = document.getElementById('cfgLlmUrl').value.trim();
+            if (!cachedModels.length && llmUrl) {
+                testConnection().then(function() {
+                    showModelPicker(type);
+                });
+            } else {
+                showModelPicker(type);
+            }
+        }
+        
+        function showModelPicker(type) {
+            var dialog = document.getElementById('modelSelectDialog');
+            if (!cachedModels.length) {
+                dialog.style.display = 'block';
+                dialog.innerHTML = '<p style="color:#999;">请先点击"测试连接"获取模型列表</p>';
+                return;
+            }
+            
+            var html = '<h4 style="color:#667eea;margin-bottom:10px;">选择' + (type === 'llm' ? 'LLM' : 'Embedding') + '模型</h4>';
+            cachedModels.forEach(function(m) {
+                html += `<span class="model-chip" onclick="pickModelAndClose('${m}', '${type}')">${m}</span>`;
+            });
+            html += '<br><button class="btn" onclick="document.getElementById(\'modelSelectDialog\').style.display=\'none\'" style="margin-top:10px;font-size:0.8em;">关闭</button>';
+            dialog.style.display = 'block';
+            dialog.innerHTML = html;
+        }
+        
+        function pickModelAndClose(name, type) {
+            var target = type === 'llm' ? 'cfgLlmModel' : 'cfgEmbModel';
+            document.getElementById(target).value = name;
+            document.getElementById('modelSelectDialog').style.display = 'none';
+        }
+        
+        function copyLlmUrl() {
+            document.getElementById('cfgEmbUrl').value = document.getElementById('cfgLlmUrl').value;
+        }
+        
+        async function saveConfig() {
+            var resultDiv = document.getElementById('configResult');
+            var progress = document.getElementById('configProgress');
+            var progressFill = document.getElementById('configProgressFill');
+            var btn = document.getElementById('saveConfigBtn');
+            
+            var llmKey = document.getElementById('cfgLlmKey').value.trim();
+            var embKey = document.getElementById('cfgEmbKey').value.trim();
+            
+            var body = {
+                llm_base_url: document.getElementById('cfgLlmUrl').value.trim(),
+                llm_model: document.getElementById('cfgLlmModel').value.trim(),
+                embedding_base_url: document.getElementById('cfgEmbUrl').value.trim(),
+                embedding_model: document.getElementById('cfgEmbModel').value.trim()
+            };
+            if (llmKey && llmKey !== '••••••••') body.llm_api_key = llmKey;
+            if (embKey && embKey !== '••••••••') body.embedding_api_key = embKey;
+            
+            progress.style.display = 'block';
+            progressFill.style.width = '30%';
+            btn.disabled = true;
+            
+            try {
+                var res = await fetch(`${API_BASE}/api/config/llm`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                var data = await res.json();
+                progressFill.style.width = '100%';
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success" style="display: block; margin-top: 15px;">
+                            ✅ ${data.message}<br>
+                            <small>更新项: ${(data.updated||[]).join(', ')}</small>
+                        </div>`;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-error" style="display: block; margin-top: 15px;">
+                            ❌ ${data.error}
+                        </div>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-error" style="display: block; margin-top: 15px;">
+                        ❌ 保存失败: ${e}
+                    </div>`;
+            } finally {
+                setTimeout(function() {
+                    progress.style.display = 'none';
+                    progressFill.style.width = '0%';
+                    btn.disabled = false;
+                }, 1000);
+            }
+        }
+    </script>
+    
+    <!-- 底部版权信息 -->
+    <footer style="text-align: center; padding: 20px; color: white; margin-top: 20px;">
+        <p>© 2026 RAG-Local 知识库管理系统 版权所有</p>
+    </footer>
+</body>
+</html>

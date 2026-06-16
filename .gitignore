@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Embedded Python environment (large, should be installed locally)
+python_embedded/
+
+# Pre-downloaded packages (large, offline install only)
+packages/
+
+# User documents and vector database
+documents/
+!documents/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# Runtime config with secrets
+config/.env
+config/config.yaml
+
+# Vector database cache
+.rag/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Installer output
+installer/Output/*.exe
+installer/Output/*.zip
+installer/Output/*.rar
+unins000.dat
+unins000.exe
+
+# Backups
+*.backup
+*.bak
+*.tmp

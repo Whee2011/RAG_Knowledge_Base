@@ -1,0 +1,80 @@
+﻿# RAG 知识库系统 - 核心依赖
+# 最后更新：2026-04-29
+# Python 版本：3.11.x
+# 版本：v3.5
+
+# ==================== 核心依赖 ====================
+
+# 向量数据库
+chromadb==1.5.6
+
+# Web 框架
+flask==3.1.3
+
+# PDF 处理
+pymupdf==1.27.2.2
+
+# 数据分析
+pandas
+
+# Office 文档处理
+python-docx==1.2.0
+openpyxl==3.1.5
+python-pptx==1.0.2
+
+# 图片处理
+pillow
+
+# HTTP 请求
+requests
+
+# 配置文件
+pyyaml
+
+# ==================== OCR 依赖 ====================
+# ✅ RapidOCR - 无 protobuf/numpy 版本限制
+# 基于 ONNX Runtime，使用 PP-OCRv4 模型
+
+# OCR 引擎（替代 PaddleOCR）
+rapidocr
+
+# ==================== 高级检索依赖 ====================
+# 混合检索（BM25 关键词检索）- v3.5 新增
+rank-bm25==0.2.2
+
+# ONNX Runtime（RapidOCR 依赖，已安装）
+# onnxruntime（无需显式安装，chromadb 已包含）
+
+# ==================== 系统要求 ====================
+# Windows 10/11
+# Visual C++ 2015-2022 运行库（必须）
+# 下载地址：https://aka.ms/vs/17/release/vc_redist.x64.exe
+
+# ==================== 安装命令 ====================
+# pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# ==================== 版本说明 ====================
+# ✅ v3.5 (2026-04-29):
+#   - 新增 rank-bm25 依赖，支持混合检索
+#   - 修复安装包缺失依赖问题
+
+# ✅ 已测试版本（2026-04-16）：
+#   - Python 3.11.9
+#   - ChromaDB 1.5.6
+#   - Flask 3.1.3
+#   - PyMuPDF 1.27.2.2
+#   - RapidOCR 3.8.1（替代 PaddleOCR）
+#   - ONNX Runtime 1.23.2
+#   - NumPy 2.4.4（无版本限制）
+#   - Protobuf 6.33.6（无版本限制）
+#   - rank-bm25 0.2.2（混合检索）
+
+# ✅ 优势：
+#   - 无 protobuf 版本冲突（copaw 可正常启动）
+#   - 无 numpy ABI 版本限制
+#   - 离线安装包已包含所有依赖
+#   - 支持向量检索 + BM25 混合检索
+
+# ⚠️ 已移除的依赖：
+#   - paddlepaddle（与 copaw protobuf 冲突）
+#   - paddleocr（依赖 protobuf ≤3.20.2）

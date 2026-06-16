@@ -1,0 +1,89 @@
+# RAG 知识库系统 - 配置文件
+# 最后更新：2026-04-15
+
+# ==================== 文档路径 ====================
+# 文档存储目录（支持相对路径和绝对路径，相对路径以项目根目录为基准）
+documents_path: "documents"
+
+# ==================== 向量数据库 ====================
+# ChromaDB 存储路径
+chroma_db_path: "documents\\.rag\\chroma_db"
+
+# Collection 名称
+collection_name: "default"
+
+# 嵌入模型维度
+embedding_dim: 2560
+
+# ==================== LLM 配置 ====================
+# LM Studio API 地址
+llm_base_url: "http://127.0.0.1:1234"
+
+# LLM 模型名称
+llm_model: "qwen/qwen3.5-9b"
+
+# 上下文窗口大小
+context_length: 16384
+
+# 最大 Token 数
+max_tokens: 2048
+
+# 温度参数
+temperature: 0.7
+
+# ==================== Embedding 配置 ====================
+# Embedding 模型名称
+embedding_model: "text-embedding-qwen3-embedding-4b"
+
+# Embedding API 地址（如与 LLM 相同可留空）
+embedding_base_url: ""
+
+# ==================== 检索配置 ====================
+# 默认检索文档数量
+top_k: 2
+
+# 相似度阈值（0-1，越低越宽松）
+similarity_threshold: 0.3
+
+# 是否自动刷新索引
+auto_refresh: false
+
+# ==================== OCR 配置 ====================
+# 是否启用 OCR
+enable_ocr: true
+
+# OCR 语言
+ocr_lang: "ch"
+
+# OCR 模型路径（留空使用默认）
+ocr_model_path: ""
+
+# 自动 OCR 检测（新文件放入时自动 OCR）
+auto_ocr: true
+
+# ==================== Web 界面配置 ====================
+# Web 服务端口
+web_port: 5000
+
+# Web 服务主机
+web_host: "0.0.0.0"
+
+# 是否启用调试模式
+web_debug: false
+
+# ==================== 日志配置 ====================
+# 日志级别：DEBUG, INFO, WARNING, ERROR
+log_level: "INFO"
+
+# 日志文件路径
+log_file: "logs\\rag.log"
+
+# ==================== 其他配置 ====================
+# 是否启用 Token 统计
+enable_token_stats: true
+
+# 是否启用耗时统计
+enable_timing_stats: true
+
+# 备份保留天数
+backup_retention_days: 7
