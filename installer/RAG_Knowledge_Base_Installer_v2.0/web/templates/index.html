@@ -325,85 +325,48 @@
         .type-txt { background: #fff3e0; color: #ef6c00; }
         .type-pptx { background: #fce4ec; color: #c2185b; }
         
-        #fileInput {
-            display: none;
-        }
-        
-        /* Excel 分析表格样式 */
-        .excel-table {
+        .result-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
-            font-size: 0.9em;
+            margin-top: 15px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
         }
-        .excel-table th {
-            background: #667eea;
-            color: white;
-            padding: 10px 12px;
+
+        .result-table th,
+        .result-table td {
+            padding: 10px;
             text-align: left;
-            font-weight: bold;
-        }
-        .excel-table td {
-            padding: 8px 12px;
             border-bottom: 1px solid #e0e0e0;
         }
-        .excel-table tr:hover { background: #f5f5ff; }
-        .excel-table .diff-up { color: #c62828; font-weight: bold; }
-        .excel-table .diff-down { color: #2e7d32; font-weight: bold; }
-        .excel-table .highlight-row { background: #fff9c4; }
-        
-        .tab-nav {
-            display: flex;
-            gap: 0;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-        .tab-btn {
-            padding: 10px 25px;
-            border: none;
-            background: none;
-            cursor: pointer;
-            font-size: 1em;
-            color: #666;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-        .tab-btn.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
+
+        .result-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             font-weight: bold;
         }
-        .tab-btn:hover { color: #667eea; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        
-        .config-input {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 0.9em;
-            transition: border 0.3s;
+
+        .result-table tr:hover {
+            background: #f5f5f5;
         }
-        .config-input:focus {
+
+        .extract-fields {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            margin-bottom: 15px;
+        }
+
+        .extract-fields:focus {
             outline: none;
             border-color: #667eea;
         }
-        
-        .model-chip {
-            display: inline-block;
-            padding: 5px 12px;
-            margin: 3px;
-            background: #e8f0fe;
-            color: #1565c0;
-            border-radius: 15px;
-            cursor: pointer;
-            font-size: 0.85em;
-            transition: all 0.2s;
-        }
-        .model-chip:hover {
-            background: #667eea;
-            color: white;
+
+        #fileInput {
+            display: none;
         }
     </style>
 </head>
@@ -463,6 +426,7 @@
                 <h2>⚡ 快捷操作</h2>
                 <div style="display: flex; flex-direction: column; gap: 10px;">
                     <button class="btn" onclick="document.getElementById('queryInput').focus()">❓ 提问</button>
+                    <button class="btn" onclick="document.getElementById('extractQuestion').focus()">📊 Excel 分析</button>
                     <button class="btn btn-success" onclick="refreshIndex()">🔄 刷新索引</button>
                     <button class="btn btn-warning" onclick="loadFiles()">📁 文件管理</button>
                     <button class="btn btn-danger" onclick="forceRefresh()">⚠️ 强制重建索引</button>
@@ -500,24 +464,35 @@
             <div id="queryResult"></div>
         </div>
         
-        <!-- Excel 分析 -->
+        <!-- Excel 结构化分析 -->
         <div class="card query-section">
-            <h2>📊 Excel 数据分析</h2>
-            <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">
-                支持：单文件查询 · 多文件对比 · 跨月聚合 · 跨城市对比
-            </p>
-            <textarea class="query-input" id="excelQueryInput" placeholder="请输入分析问题，例如：&#10;• 石家庄2026年3月电费是多少？&#10;• 石家庄3月和2月电费变化如何？&#10;• 最近3个月石家庄电费总量是多少？&#10;• 石家庄和保定3月电费对比"></textarea>
+            <h2>📊 Excel 结构化分析</h2>
+            <textarea class="query-input" id="extractQuestion" placeholder="请输入分析需求，例如：&#10;• 2025 年销售额总和是多少？&#10;• 列出华东区的销售记录&#10;• 销售额最高的前 5 条记录&#10;• 按地区统计销售额"></textarea>
+
+            <input type="text" class="extract-fields" id="extractFields" placeholder="可选：要提取的字段，用逗号分隔，例如：年份,地区,销售额">
+
             <div style="text-align: center;">
-                <button class="btn" onclick="excelQuery()" id="excelQueryBtn">📊 分析数据</button>
-                <button class="btn btn-warning" onclick="loadExcelFiles()" style="margin-left: 10px;">📋 查看 Excel 文件</button>
+                <button class="btn" onclick="extractData()" id="extractBtn">📈 分析 Excel/CSV</button>
+                <select class="btn" id="extractTopK" style="margin-left: 10px;">
+                    <option value="3">前 3 个结果</option>
+                    <option value="5" selected>前 5 个结果</option>
+                    <option value="10">前 10 个结果</option>
+                </select>
             </div>
-            <div class="progress-bar" id="excelProgress">
-                <div class="progress-bar-fill" id="excelProgressFill"></div>
+
+            <div class="alert alert-info" style="margin-top: 15px; display: block;">
+                <strong>💡 提示：</strong><br>
+                • 仅支持 Excel (.xlsx/.xls) 和 CSV (.csv) 文件<br>
+                • 首次分析会自动保存表格 schema<br>
+                • 支持聚合（总和/平均/最大/最小/计数）、筛选、排序、分组统计
             </div>
-            <div id="excelResult"></div>
-            <div id="excelFilesList" style="display: none; margin-top: 20px;"></div>
+
+            <div class="progress-bar" id="extractProgress">
+                <div class="progress-bar-fill" id="extractProgressFill"></div>
+            </div>
+            <div id="extractResult"></div>
         </div>
-        
+
         <!-- 文件列表 -->
         <div class="card query-section">
             <h2>📁 文件管理</h2>
@@ -526,62 +501,6 @@
                     点击"查看文件"按钮加载文件列表
                 </p>
             </div>
-        </div>
-        
-        <!-- 模型配置 -->
-        <div class="card query-section">
-            <h2>⚙️ 模型配置</h2>
-            <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">
-                配置 LLM 和 Embedding 模型连接参数 · 测试连接 · 保存到 .env 文件
-            </p>
-            
-            <div style="border-left: 3px solid #667eea; padding-left: 15px; margin-bottom: 20px;">
-                <h3 style="color: #667eea; margin-bottom: 10px;">🔮 LLM 对话模型</h3>
-                <div style="display: grid; grid-template-columns: 1fr 3fr; gap: 8px; align-items: center;">
-                    <label style="text-align: right; color: #333; font-size: 0.9em;">服务器地址</label>
-                    <input class="config-input" id="cfgLlmUrl" placeholder="http://127.0.0.1:1234">
-                    
-                    <label style="text-align: right; color: #333; font-size: 0.9em;">模型名称</label>
-                    <div style="display: flex; gap: 5px;">
-                        <input class="config-input" id="cfgLlmModel" placeholder="qwen/qwen3.5-9b" style="flex:1">
-                        <button class="btn" onclick="selectModel('llm')" style="padding: 5px 12px; font-size: 0.8em; white-space: nowrap;">📋 选择</button>
-                    </div>
-                    
-                    <label style="text-align: right; color: #333; font-size: 0.9em;">API Key</label>
-                    <input class="config-input" id="cfgLlmKey" placeholder="LM Studio 本地运行可留空" type="password">
-                </div>
-            </div>
-            
-            <div style="border-left: 3px solid #28a745; padding-left: 15px; margin-bottom: 20px;">
-                <h3 style="color: #28a745; margin-bottom: 10px;">🧩 Embedding 嵌入模型</h3>
-                <div style="display: grid; grid-template-columns: 1fr 3fr; gap: 8px; align-items: center;">
-                    <label style="text-align: right; color: #333; font-size: 0.9em;">服务器地址</label>
-                    <div style="display: flex; gap: 5px;">
-                        <input class="config-input" id="cfgEmbUrl" placeholder="http://127.0.0.1:1234" style="flex:1">
-                        <button class="btn btn-warning" onclick="copyLlmUrl()" style="padding: 5px 12px; font-size: 0.8em; white-space: nowrap;">同 LLM</button>
-                    </div>
-                    
-                    <label style="text-align: right; color: #333; font-size: 0.9em;">模型名称</label>
-                    <div style="display: flex; gap: 5px;">
-                        <input class="config-input" id="cfgEmbModel" placeholder="text-embedding-qwen3-embedding-4b" style="flex:1">
-                        <button class="btn" onclick="selectModel('emb')" style="padding: 5px 12px; font-size: 0.8em; white-space: nowrap;">📋 选择</button>
-                    </div>
-                    
-                    <label style="text-align: right; color: #333; font-size: 0.9em;">API Key</label>
-                    <input class="config-input" id="cfgEmbKey" placeholder="LM Studio 本地运行可留空" type="password">
-                </div>
-            </div>
-            
-            <div style="text-align: center; margin: 15px 0;">
-                <button class="btn btn-success" onclick="testConnection()" id="testConnectionBtn">🔍 测试连接</button>
-                <button class="btn" onclick="saveConfig()" id="saveConfigBtn">💾 保存配置</button>
-            </div>
-            
-            <div class="progress-bar" id="configProgress">
-                <div class="progress-bar-fill" id="configProgressFill"></div>
-            </div>
-            <div id="configResult"></div>
-            <div id="modelSelectDialog" style="display: none; margin-top: 15px; background: #f8f9fa; padding: 15px; border-radius: 8px;"></div>
         </div>
     </div>
     
@@ -1027,376 +946,144 @@
                 query();
             }
         });
-        
-        // 支持 Excel 输入框 Enter 键
-        document.getElementById('excelQueryInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && e.ctrlKey) {
-                excelQuery();
-            }
-        });
-        
-        // Excel 数据分析
-        async function excelQuery() {
-            const question = document.getElementById('excelQueryInput').value.trim();
+
+        // Excel 结构化分析
+        async function extractData() {
+            const question = document.getElementById('extractQuestion').value.trim();
+            const fieldsText = document.getElementById('extractFields').value.trim();
+            const topK = document.getElementById('extractTopK').value;
+            const extractBtn = document.getElementById('extractBtn');
+            const progress = document.getElementById('extractProgress');
+            const progressFill = document.getElementById('extractProgressFill');
+
             if (!question) {
-                showAlert('请输入分析问题', 'error');
+                showAlert('请输入分析需求', 'error');
                 return;
             }
-            
-            const progress = document.getElementById('excelProgress');
-            const progressFill = document.getElementById('excelProgressFill');
-            const btn = document.getElementById('excelQueryBtn');
-            const resultDiv = document.getElementById('excelResult');
-            
+
+            // 解析字段
+            const fields = fieldsText ? fieldsText.split(',').map(f => f.trim()).filter(f => f) : [];
+
             progress.style.display = 'block';
             progressFill.style.width = '30%';
-            btn.disabled = true;
-            resultDiv.innerHTML = '';
-            
+            extractBtn.disabled = true;
+
             try {
-                const response = await fetch(`${API_BASE}/api/excel/query`, {
+                const response = await fetch(`${API_BASE}/api/extract`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: question })
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        fields: fields,
+                        top_k: parseInt(topK)
+                    })
                 });
-                
+
                 const data = await response.json();
                 progressFill.style.width = '100%';
-                
+
                 if (data.success) {
-                    displayExcelResult(data.data);
+                    displayExtractResult(data.data);
                 } else {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-error" style="display: block; margin-top: 15px;">
-                            ❌ ${data.error}
-                        </div>`;
+                    showAlert('分析失败：' + data.error, 'error');
                 }
             } catch (error) {
-                resultDiv.innerHTML = `
-                    <div class="alert alert-error" style="display: block; margin-top: 15px;">
-                        ❌ 请求失败：${error}
-                    </div>`;
+                showAlert('请求失败：' + error, 'error');
             } finally {
                 setTimeout(() => {
                     progress.style.display = 'none';
                     progressFill.style.width = '0%';
-                    btn.disabled = false;
+                    extractBtn.disabled = false;
                 }, 1000);
             }
         }
-        
-        function displayExcelResult(data) {
-            const resultDiv = document.getElementById('excelResult');
-            let html = '';
-            
-            html += `<div class="result-box" style="margin-top: 15px;">
-                <div class="result-answer">${formatAnswer(data.answer)}</div>`;
-            
-            if (data.files_used && data.files_used.length > 0) {
-                html += `<p style="color: #999; font-size: 0.85em; margin-top: 10px;">📂 涉及文件：${data.files_used.join(', ')}</p>`;
-            }
-            
-            const rd = data.result_data;
-            if (rd) {
-                html += '<div class="result-sources"><h4>📊 数据详情</h4>';
-                
-                if (rd.type === 'compare' || rd.type === 'cross_compare') {
-                    html += buildComparisonTable(rd);
-                } else if (rd.type === 'aggregate') {
-                    html += buildAggregateView(rd);
-                } else if (rd.type === 'single' && rd.data) {
-                    html += buildDataTable(rd.columns, rd.data);
-                }
-                
-                html += '</div>';
-            }
-            
-            html += '</div>';
-            resultDiv.innerHTML = html;
-        }
-        
-        function buildComparisonTable(rd) {
-            let html = '<table class="excel-table"><tr><th>指标</th>';
-            if (rd.type === 'cross_compare') {
-                html += `<th>${rd.city1}</th><th>${rd.city2}</th><th>差异</th>`;
-            } else {
-                html += `<th>${rd.date1}</th><th>${rd.date2}</th><th>变化</th><th>变化率</th>`;
-            }
-            html += '</tr>';
-            
-            rd.comparison.forEach(row => {
-                const diffClass = row.diff > 0 ? 'diff-up' : (row.diff < 0 ? 'diff-down' : '');
-                html += `<tr><td><strong>${row.column}</strong></td>`;
-                if (rd.type === 'cross_compare') {
-                    html += `<td>${row[rd.city1]}</td><td>${row[rd.city2]}</td>`;
-                } else {
-                    html += `<td>${row.value1}</td><td>${row.value2}</td>`;
-                }
-                html += `<td class="${diffClass}">${row.diff > 0 ? '+' : ''}${row.diff.toFixed(2)}</td>`;
-                if (rd.type !== 'cross_compare') {
-                    html += `<td class="${diffClass}">${row.rate !== null ? (row.rate > 0 ? '+' : '') + row.rate + '%' : '-'}</td>`;
-                }
-                html += '</tr>';
-            });
-            html += '</table>';
-            return html;
-        }
-        
-        function buildAggregateView(rd) {
-            let html = '<table class="excel-table"><tr><th>指标</th><th>总计</th><th>平均值</th><th>月份数</th></tr>';
-            for (const [col, stats] of Object.entries(rd.summary)) {
-                html += `<tr><td><strong>${col}</strong></td><td>${stats.total}</td><td>${stats.average}</td><td>${stats.count}</td></tr>`;
-                if (stats.monthly) {
-                    html += '<tr class="highlight-row"><td colspan="4">';
-                    stats.monthly.forEach(m => {
-                        html += `<span style="margin-right:15px;">📅 ${m.date}: ${m.value}</span>`;
-                    });
-                    html += '</td></tr>';
-                }
-            }
-            html += '</table>';
-            return html;
-        }
-        
-        function buildDataTable(columns, data) {
-            let html = '<table class="excel-table"><tr>';
-            columns.forEach(c => { html += `<th>${c}</th>`; });
-            html += '</tr>';
-            data.forEach(row => {
-                html += '<tr>';
-                columns.forEach(c => { html += `<td>${row[c] !== undefined ? row[c] : ''}</td>`; });
-                html += '</tr>';
-            });
-            html += '</table>';
-            return html;
-        }
-        
-        async function loadExcelFiles() {
-            const container = document.getElementById('excelFilesList');
-            container.style.display = 'block';
-            container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">加载中...</p>';
-            
-            try {
-                const kb = { _build_excel_index: null };
-                const response = await fetch(`${API_BASE}/api/files`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    const excelFiles = data.data.filter(f => ['xlsx', 'xls', 'csv'].includes(f.type));
-                    if (excelFiles.length === 0) {
-                        container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">暂无 Excel 文件，请先上传</p>';
-                        return;
-                    }
-                    
-                    let html = '<h4 style="color: #667eea; margin-bottom: 10px;">📋 Excel 文件列表</h4>';
-                    excelFiles.forEach(file => {
-                        html += `<div class="file-item">
-                            <div class="file-info">
-                                <div class="file-name">
-                                    <span class="type-badge type-xlsx">${file.type.toUpperCase()}</span>
-                                    ${file.name}
-                                </div>
-                                <div class="file-meta">📂 ${file.path} · 💾 ${formatFileSize(file.size)} · 🕐 ${file.modified}</div>
-                            </div>
-                        </div>`;
-                    });
-                    container.innerHTML = html;
-                }
-            } catch (error) {
-                container.innerHTML = '<p style="color: red;">加载失败：' + error + '</p>';
-            }
-        }
-        
-        // ==================== 模型配置管理 ====================
-        
-        var cachedModels = [];
-        
-        window.onload = function() {
-            loadStatus();
-            setupDragDrop();
-            loadConfig();
-        };
-        
-        async function loadConfig() {
-            try {
-                const res = await fetch(`${API_BASE}/api/config/llm`);
-                const data = await res.json();
-                if (data.success) {
-                    var d = data.data;
-                    document.getElementById('cfgLlmUrl').value = d.llm_base_url || '';
-                    document.getElementById('cfgLlmModel').value = d.llm_model || '';
-                    document.getElementById('cfgLlmKey').value = d.has_llm_api_key ? '••••••••' : '';
-                    document.getElementById('cfgEmbUrl').value = d.embedding_base_url || '';
-                    document.getElementById('cfgEmbModel').value = d.embedding_model || '';
-                    document.getElementById('cfgEmbKey').value = d.has_embedding_api_key ? '••••••••' : '';
-                }
-            } catch (e) {
-                console.error('加载配置失败:', e);
-            }
-        }
-        
-        async function testConnection() {
-            var resultDiv = document.getElementById('configResult');
-            var progress = document.getElementById('configProgress');
-            var progressFill = document.getElementById('configProgressFill');
-            var btn = document.getElementById('testConnectionBtn');
-            
-            var llmUrl = document.getElementById('cfgLlmUrl').value.trim();
-            var llmKey = document.getElementById('cfgLlmKey').value.trim();
-            if (llmKey === '••••••••') llmKey = '';
-            
-            progress.style.display = 'block';
-            progressFill.style.width = '30%';
-            btn.disabled = true;
-            resultDiv.innerHTML = '';
-            
-            try {
-                var res = await fetch(`${API_BASE}/api/config/llm/test`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ llm_base_url: llmUrl, llm_api_key: llmKey })
-                });
-                var data = await res.json();
-                progressFill.style.width = '100%';
-                
-                if (data.success) {
-                    cachedModels = data.data.models || [];
-                    var modelHtml = '';
-                    cachedModels.forEach(function(m) {
-                        modelHtml += `<span class="model-chip" onclick="pickModel('${m}')">${m}</span>`;
-                    });
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-success" style="display: block; margin-top: 15px;">
-                            ✅ ${data.data.message}<br>
-                            <small>服务器: ${data.data.url}</small>
-                            <div style="margin-top: 10px;">${modelHtml}</div>
-                        </div>`;
-                } else {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-error" style="display: block; margin-top: 15px;">
-                            ❌ ${data.error}
-                        </div>`;
-                }
-            } catch (e) {
+
+        // 显示 Excel 分析结果
+        function displayExtractResult(data) {
+            const resultDiv = document.getElementById('extractResult');
+
+            if (data.error) {
                 resultDiv.innerHTML = `
-                    <div class="alert alert-error" style="display: block; margin-top: 15px;">
-                        ❌ 连接失败: ${e}
-                    </div>`;
-            } finally {
-                setTimeout(function() {
-                    progress.style.display = 'none';
-                    progressFill.style.width = '0%';
-                    btn.disabled = false;
-                }, 1000);
-            }
-        }
-        
-        function pickModel(name) {
-            var llmModel = document.getElementById('cfgLlmModel');
-            var embModel = document.getElementById('cfgEmbModel');
-            var currentLlama = llmModel.value;
-            
-            if (!currentLlama || name.toLowerCase().includes('embed')) {
-                embModel.value = name;
-            } else {
-                llmModel.value = name;
-            }
-        }
-        
-        function selectModel(type) {
-            var llmUrl = document.getElementById('cfgLlmUrl').value.trim();
-            if (!cachedModels.length && llmUrl) {
-                testConnection().then(function() {
-                    showModelPicker(type);
-                });
-            } else {
-                showModelPicker(type);
-            }
-        }
-        
-        function showModelPicker(type) {
-            var dialog = document.getElementById('modelSelectDialog');
-            if (!cachedModels.length) {
-                dialog.style.display = 'block';
-                dialog.innerHTML = '<p style="color:#999;">请先点击"测试连接"获取模型列表</p>';
+                    <div class="result-box" style="border-left-color: #f5576c;">
+                        <strong>❌ 分析失败：</strong><br>
+                        ${data.error}
+                    </div>
+                `;
                 return;
             }
-            
-            var html = '<h4 style="color:#667eea;margin-bottom:10px;">选择' + (type === 'llm' ? 'LLM' : 'Embedding') + '模型</h4>';
-            cachedModels.forEach(function(m) {
-                html += `<span class="model-chip" onclick="pickModelAndClose('${m}', '${type}')">${m}</span>`;
-            });
-            html += '<br><button class="btn" onclick="document.getElementById(\'modelSelectDialog\').style.display=\'none\'" style="margin-top:10px;font-size:0.8em;">关闭</button>';
-            dialog.style.display = 'block';
-            dialog.innerHTML = html;
-        }
-        
-        function pickModelAndClose(name, type) {
-            var target = type === 'llm' ? 'cfgLlmModel' : 'cfgEmbModel';
-            document.getElementById(target).value = name;
-            document.getElementById('modelSelectDialog').style.display = 'none';
-        }
-        
-        function copyLlmUrl() {
-            document.getElementById('cfgEmbUrl').value = document.getElementById('cfgLlmUrl').value;
-        }
-        
-        async function saveConfig() {
-            var resultDiv = document.getElementById('configResult');
-            var progress = document.getElementById('configProgress');
-            var progressFill = document.getElementById('configProgressFill');
-            var btn = document.getElementById('saveConfigBtn');
-            
-            var llmKey = document.getElementById('cfgLlmKey').value.trim();
-            var embKey = document.getElementById('cfgEmbKey').value.trim();
-            
-            var body = {
-                llm_base_url: document.getElementById('cfgLlmUrl').value.trim(),
-                llm_model: document.getElementById('cfgLlmModel').value.trim(),
-                embedding_base_url: document.getElementById('cfgEmbUrl').value.trim(),
-                embedding_model: document.getElementById('cfgEmbModel').value.trim()
-            };
-            if (llmKey && llmKey !== '••••••••') body.llm_api_key = llmKey;
-            if (embKey && embKey !== '••••••••') body.embedding_api_key = embKey;
-            
-            progress.style.display = 'block';
-            progressFill.style.width = '30%';
-            btn.disabled = true;
-            
-            try {
-                var res = await fetch(`${API_BASE}/api/config/llm`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                var data = await res.json();
-                progressFill.style.width = '100%';
-                
-                if (data.success) {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-success" style="display: block; margin-top: 15px;">
-                            ✅ ${data.message}<br>
-                            <small>更新项: ${(data.updated||[]).join(', ')}</small>
-                        </div>`;
-                } else {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-error" style="display: block; margin-top: 15px;">
-                            ❌ ${data.error}
-                        </div>`;
-                }
-            } catch (e) {
-                resultDiv.innerHTML = `
-                    <div class="alert alert-error" style="display: block; margin-top: 15px;">
-                        ❌ 保存失败: ${e}
-                    </div>`;
-            } finally {
-                setTimeout(function() {
-                    progress.style.display = 'none';
-                    progressFill.style.width = '0%';
-                    btn.disabled = false;
-                }, 1000);
+
+            let html = `
+                <div class="result-box">
+                    <div class="result-answer">
+                        <strong>📊 分析结果：</strong><br><br>
+                        ${formatAnswer(data.answer || '未找到相关数据')}
+                    </div>
+            `;
+
+            // 显示数据表格
+            if (data.data && data.data.length > 0) {
+                const columns = Object.keys(data.data[0]);
+                html += `
+                    <div style="margin-top: 20px;">
+                        <strong>📋 详细数据（共 ${data.data.length} 条）：</strong>
+                        <div style="overflow-x: auto;">
+                            <table class="result-table">
+                                <thead>
+                                    <tr>
+                                        ${columns.map(col => `<th>${col}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.data.map(row => `
+                                        <tr>
+                                            ${columns.map(col => `<td>${row[col] !== null && row[col] !== undefined ? row[col] : '-'}</td>`).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
             }
+
+            // 显示字段提取结果
+            if (data.extracted_fields && data.extracted_fields.length > 0) {
+                const columns = Object.keys(data.extracted_fields[0]);
+                html += `
+                    <div style="margin-top: 20px;">
+                        <strong>🔍 字段提取结果：</strong>
+                        <div style="overflow-x: auto;">
+                            <table class="result-table">
+                                <thead>
+                                    <tr>
+                                        ${columns.map(col => `<th>${col}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.extracted_fields.map(row => `
+                                        <tr>
+                                            ${columns.map(col => `<td>${row[col] !== null && row[col] !== undefined ? row[col] : '-'}</td>`).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            resultDiv.innerHTML = html;
         }
+
+        // 支持 Enter 键触发 Excel 分析
+        document.getElementById('extractQuestion').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                extractData();
+            }
+        });
     </script>
     
     <!-- 底部版权信息 -->

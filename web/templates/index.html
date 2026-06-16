@@ -325,6 +325,46 @@
         .type-txt { background: #fff3e0; color: #ef6c00; }
         .type-pptx { background: #fce4ec; color: #c2185b; }
         
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .result-table th,
+        .result-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .result-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+        }
+
+        .result-table tr:hover {
+            background: #f5f5f5;
+        }
+
+        .extract-fields {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            margin-bottom: 15px;
+        }
+
+        .extract-fields:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
         #fileInput {
             display: none;
         }
@@ -386,6 +426,7 @@
                 <h2>⚡ 快捷操作</h2>
                 <div style="display: flex; flex-direction: column; gap: 10px;">
                     <button class="btn" onclick="document.getElementById('queryInput').focus()">❓ 提问</button>
+                    <button class="btn" onclick="document.getElementById('extractQuestion').focus()">📊 Excel 分析</button>
                     <button class="btn btn-success" onclick="refreshIndex()">🔄 刷新索引</button>
                     <button class="btn btn-warning" onclick="loadFiles()">📁 文件管理</button>
                     <button class="btn btn-danger" onclick="forceRefresh()">⚠️ 强制重建索引</button>
@@ -423,6 +464,35 @@
             <div id="queryResult"></div>
         </div>
         
+        <!-- Excel 结构化分析 -->
+        <div class="card query-section">
+            <h2>📊 Excel 结构化分析</h2>
+            <textarea class="query-input" id="extractQuestion" placeholder="请输入分析需求，例如：&#10;• 2025 年销售额总和是多少？&#10;• 列出华东区的销售记录&#10;• 销售额最高的前 5 条记录&#10;• 按地区统计销售额"></textarea>
+
+            <input type="text" class="extract-fields" id="extractFields" placeholder="可选：要提取的字段，用逗号分隔，例如：年份,地区,销售额">
+
+            <div style="text-align: center;">
+                <button class="btn" onclick="extractData()" id="extractBtn">📈 分析 Excel/CSV</button>
+                <select class="btn" id="extractTopK" style="margin-left: 10px;">
+                    <option value="3">前 3 个结果</option>
+                    <option value="5" selected>前 5 个结果</option>
+                    <option value="10">前 10 个结果</option>
+                </select>
+            </div>
+
+            <div class="alert alert-info" style="margin-top: 15px; display: block;">
+                <strong>💡 提示：</strong><br>
+                • 仅支持 Excel (.xlsx/.xls) 和 CSV (.csv) 文件<br>
+                • 首次分析会自动保存表格 schema<br>
+                • 支持聚合（总和/平均/最大/最小/计数）、筛选、排序、分组统计
+            </div>
+
+            <div class="progress-bar" id="extractProgress">
+                <div class="progress-bar-fill" id="extractProgressFill"></div>
+            </div>
+            <div id="extractResult"></div>
+        </div>
+
         <!-- 文件列表 -->
         <div class="card query-section">
             <h2>📁 文件管理</h2>
@@ -874,6 +944,144 @@
         document.getElementById('queryInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && e.ctrlKey) {
                 query();
+            }
+        });
+
+        // Excel 结构化分析
+        async function extractData() {
+            const question = document.getElementById('extractQuestion').value.trim();
+            const fieldsText = document.getElementById('extractFields').value.trim();
+            const topK = document.getElementById('extractTopK').value;
+            const extractBtn = document.getElementById('extractBtn');
+            const progress = document.getElementById('extractProgress');
+            const progressFill = document.getElementById('extractProgressFill');
+
+            if (!question) {
+                showAlert('请输入分析需求', 'error');
+                return;
+            }
+
+            // 解析字段
+            const fields = fieldsText ? fieldsText.split(',').map(f => f.trim()).filter(f => f) : [];
+
+            progress.style.display = 'block';
+            progressFill.style.width = '30%';
+            extractBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/extract`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        fields: fields,
+                        top_k: parseInt(topK)
+                    })
+                });
+
+                const data = await response.json();
+                progressFill.style.width = '100%';
+
+                if (data.success) {
+                    displayExtractResult(data.data);
+                } else {
+                    showAlert('分析失败：' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('请求失败：' + error, 'error');
+            } finally {
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                    progressFill.style.width = '0%';
+                    extractBtn.disabled = false;
+                }, 1000);
+            }
+        }
+
+        // 显示 Excel 分析结果
+        function displayExtractResult(data) {
+            const resultDiv = document.getElementById('extractResult');
+
+            if (data.error) {
+                resultDiv.innerHTML = `
+                    <div class="result-box" style="border-left-color: #f5576c;">
+                        <strong>❌ 分析失败：</strong><br>
+                        ${data.error}
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `
+                <div class="result-box">
+                    <div class="result-answer">
+                        <strong>📊 分析结果：</strong><br><br>
+                        ${formatAnswer(data.answer || '未找到相关数据')}
+                    </div>
+            `;
+
+            // 显示数据表格
+            if (data.data && data.data.length > 0) {
+                const columns = Object.keys(data.data[0]);
+                html += `
+                    <div style="margin-top: 20px;">
+                        <strong>📋 详细数据（共 ${data.data.length} 条）：</strong>
+                        <div style="overflow-x: auto;">
+                            <table class="result-table">
+                                <thead>
+                                    <tr>
+                                        ${columns.map(col => `<th>${col}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.data.map(row => `
+                                        <tr>
+                                            ${columns.map(col => `<td>${row[col] !== null && row[col] !== undefined ? row[col] : '-'}</td>`).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 显示字段提取结果
+            if (data.extracted_fields && data.extracted_fields.length > 0) {
+                const columns = Object.keys(data.extracted_fields[0]);
+                html += `
+                    <div style="margin-top: 20px;">
+                        <strong>🔍 字段提取结果：</strong>
+                        <div style="overflow-x: auto;">
+                            <table class="result-table">
+                                <thead>
+                                    <tr>
+                                        ${columns.map(col => `<th>${col}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.extracted_fields.map(row => `
+                                        <tr>
+                                            ${columns.map(col => `<td>${row[col] !== null && row[col] !== undefined ? row[col] : '-'}</td>`).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            resultDiv.innerHTML = html;
+        }
+
+        // 支持 Enter 键触发 Excel 分析
+        document.getElementById('extractQuestion').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                extractData();
             }
         });
     </script>
