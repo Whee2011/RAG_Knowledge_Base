@@ -1,27 +1,10 @@
-﻿# 📦 RAG 知识库安装包 v3.7
+﻿# 📦 RAG 知识库安装包 v3.3
 
-**版本：** v3.7  
-**发布日期：** 2026-05-06  
+**版本：** v3.3  
+**发布日期：** 2026-04-22  
 **Python 版本：** 3.11.9  
 **依赖包版本：** cp311（Python 3.11 专用）  
 **状态：** ✅ 生产就绪
-
----
-
-## 🆕 v3.7 新增功能
-
-### 模型配置 Web UI ⚙️
-
-- **页面配置** - Web 界面直接配置 LLM/Embedding 参数，无需手动编辑 .env
-- **连接测试** - 一键测试 LLM 服务连接，显示可用模型列表
-- **模型选择器** - 点击模型名自动填入
-- **保存到 .env** - 配置变更直接写入 .env 文件
-
-### PDF 混合 OCR 优化 🚀
-
-- **逐页检测** - 多页采样判断文本/图片比例
-- **混合处理** - 文本页用原生提取，图片页用 RapidOCR
-- **性能提升** - 封面图片 + 正文文本的 PDF，处理时间从数分钟降至数秒
 
 ---
 
@@ -516,6 +499,76 @@ pause
 - [ ] Web 界面可以正常访问（http://localhost:5000）
 - [ ] 知识库可以正常查询
 - [ ] OCR 功能可以正常使用（上传含图片的 Word 文档测试）
+
+---
+
+> **注意：** GitHub 源码仓库**不包含**大体积的运行时文件（如嵌入式 Python、预下载 whl 包、用户文档、向量数据库等）。如果你是通过 GitHub 克隆源码，请参考下方的[从源码运行](#-从源码运行)章节准备环境。
+
+---
+
+## 🧑‍💻 开发者说明
+
+### 源码仓库结构
+
+本项目的源码托管在 GitHub 上，地址：
+```
+https://github.com/Whee2011/RAG_Knowledge_Base
+```
+
+为了减小仓库体积，`.gitignore` 中已排除以下内容：
+
+| 目录/文件 | 排除原因 | 说明 |
+|-----------|---------|------|
+| `python_embedded/` | 体积大（约 200MB+） | 嵌入式 Python 3.11.9 环境，通过安装包提供 |
+| `packages/` | 体积大 | 预下载的 whl 依赖包，用于离线安装 |
+| `documents/` | 用户数据 | 存放用户上传的文档和向量数据库 |
+| `logs/` | 运行时生成 | 程序运行日志 |
+| `config/.env` | 敏感配置 | 包含 LM Studio API Key 等敏感信息 |
+| `*.backup` / `*.rar` / `*.exe` | 临时/输出文件 | 编译输出和安装包产物 |
+
+### 从源码运行
+
+如果你从 GitHub 克隆了源码，需要自行准备运行环境：
+
+**方式一：使用系统 Python + venv（推荐开发者）**
+
+```bash
+# 1. 确保已安装 Python 3.11.x
+python --version
+
+# 2. 创建虚拟环境
+python -m venv venv
+
+# 3. 激活虚拟环境
+# Windows:
+venv\Scripts\activate
+
+# 4. 安装依赖
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 5. 配置 LM Studio
+# 复制 config/.env.template 为 config/.env，并按需填写 API Key
+copy config\.env.template config\.env
+
+# 6. 启动 Web 界面
+cd web
+python web_app.py
+```
+
+**方式二：使用完整安装包（推荐普通用户）**
+
+如果你需要完整的一键安装体验（含嵌入式 Python 和离线依赖包），请使用项目打包后的安装程序，而不是直接从 GitHub 源码运行。
+
+### 安装包制作
+
+如果你修改了源码并希望重新打包分发：
+
+```batch
+# 1. 修改源码（core/、web/、tools/ 等）
+# 2. 同步到 installer/RAG_Knowledge_Base_Installer_v2.0/
+# 3. 使用 Inno Setup 编译 setup.iss
+# 4. 输出安装包位于 installer/Output/
+```
 
 ---
 
