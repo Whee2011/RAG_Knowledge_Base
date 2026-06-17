@@ -52,10 +52,10 @@ kb_instance = None
 
 
 def secure_document_path(filepath: str) -> str:
-    """验证并返回安全的文档路径，防止路径遍历攻击"""
+    """验证并返回安全的文档路径，防止路径遍历攻击（Windows 不区分大小写）"""
     full_path = os.path.normpath(os.path.join(DOCUMENTS_PATH, filepath))
-    normalized_doc_path = os.path.normpath(DOCUMENTS_PATH)
-    if not full_path.startswith(normalized_doc_path):
+    normalized_doc_path = os.path.normpath(DOCUMENTS_PATH).lower()
+    if not full_path.lower().startswith(normalized_doc_path):
         raise ValueError('非法路径')
     return full_path
 

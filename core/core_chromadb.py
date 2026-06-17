@@ -1,5 +1,8 @@
 """
 RAG Core - 简化版 (LM Studio 后端，最小依赖)
+
+⚠️  注意：此文件为历史备用实现，项目主入口为 core/core.py。
+      新开发请使用 core/core.py，此文件仅作为向后兼容保留。
 """
 import os
 import sys
@@ -75,7 +78,7 @@ class LMStudioEmbeddings:
             headers = {}
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
-            
+
             response = requests.post(
                 f"{self.base_url}/v1/embeddings",
                 json=payload,
@@ -84,12 +87,33 @@ class LMStudioEmbeddings:
             )
             if response.status_code == 200:
                 result = response.json()
-                return result.get("data", [{}])[0].get("embedding", [])
+                embedding = result.get("data", [{}])[0].get("embedding", [])
+                if not embedding:
+                    raise Exception("LM Studio 返回空 Embedding")
+                return embedding
             else:
                 raise Exception(f"LM Studio Embedding 失败：{response.status_code}")
         except Exception as e:
             print(f"[Error] Embedding 错误：{e}")
-            return [0.0] * 2560
+            raise
+
+    def embed_documents(self, texts: List[str], max_retries: int = 2) -> List[List[float]]:
+        """批量嵌入文档，单条失败时自动重试"""
+        embeddings = []
+        for i, text in enumerate(texts):
+            last_error = None
+            for attempt in range(max_retries + 1):
+                try:
+                    result = self._embed(text)
+                    embeddings.append(result)
+                    break
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries:
+                        print(f"[Warning] 第 {i+1}/{len(texts)} 条文本 Embedding 失败（尝试 {attempt+1}/{max_retries+1}）：{e}，正在重试...")
+                    else:
+                        raise Exception(f"第 {i+1}/{len(texts)} 条文本 Embedding 失败，已重试 {max_retries} 次：{last_error}") from last_error
+        return embeddings
 
 
 class KnowledgeBase:
@@ -165,15 +189,20 @@ class KnowledgeBase:
         with open(self.meta_path, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
     
+    def _get_ocr_txt_path(self, filepath: str) -> str:
+        """根据原文件路径生成对应的 OCR 文本文件路径（不区分大小写扩展名）"""
+        base, _ = os.path.splitext(filepath)
+        return base + '_ocr.txt'
+
     def _load_pdf(self, filepath: str) -> str:
         """读取 PDF 文件（优先读取 OCR 文本）"""
         # 优先检查 OCR 文本文件
-        ocr_txt_path = filepath.replace('.pdf', '_ocr.txt')
+        ocr_txt_path = self._get_ocr_txt_path(filepath)
         if os.path.exists(ocr_txt_path):
             print(f"  [OCR] 使用 OCR 文本：{os.path.basename(ocr_txt_path)}")
             with open(ocr_txt_path, 'r', encoding='utf-8') as f:
                 return f.read()
-        
+
         # 否则直接读取 PDF 文本
         text = ""
         with pymupdf.open(filepath) as doc:
@@ -374,7 +403,7 @@ class KnowledgeBase:
                 # 优先使用 OCR 文本文件（如果有）
                 if ext.lower() == '.pdf':
                     # 检查是否有对应的 OCR 文本文件
-                    ocr_txt = filepath.replace('.pdf', '_ocr.txt').replace('.PDF', '_ocr.txt')
+                    ocr_txt = self._get_ocr_txt_path(filepath)
                     if os.path.exists(ocr_txt):
                         documents.append(ocr_txt)  # 使用 OCR 文本
                         continue
@@ -400,11 +429,15 @@ class KnowledgeBase:
         if ext == '.pdf':
             try:
                 doc = pymupdf.open(filepath)
-                text = doc[0].get_text()
+                total_text = ""
+                # 检查前 3 页（如果页数不足则检查全部），避免封面误判
+                pages_to_check = min(3, len(doc))
+                for page_idx in range(pages_to_check):
+                    total_text += doc[page_idx].get_text()
                 doc.close()
-                
-                # 如果第一页文字很少，判定为图片 PDF
-                if not text.strip() or len(text.strip()) < 50:
+
+                # 如果检查页的文字总量很少，判定为图片 PDF
+                if not total_text.strip() or len(total_text.strip()) < 100:
                     return True
             except Exception as e:
                 print(f"  [WARN] 检测 PDF 失败：{e}")
@@ -424,12 +457,11 @@ class KnowledgeBase:
         ext = os.path.splitext(filepath)[1].lower()
         
         # 检查是否已有 OCR 文件
-        if ext == '.pdf':
-            ocr_txt = filepath.replace('.pdf', '_ocr.txt').replace('.PDF', '_ocr.txt')
-            if os.path.exists(ocr_txt):
-                print(f"  [OCR] 已有 OCR 文件：{os.path.basename(ocr_txt)}")
-                return ocr_txt
-        
+        ocr_txt = self._get_ocr_txt_path(filepath)
+        if os.path.exists(ocr_txt):
+            print(f"  [OCR] 已有 OCR 文件：{os.path.basename(ocr_txt)}")
+            return ocr_txt
+
         # 检测是否需要 OCR
         if self._detect_need_ocr(filepath):
             print(f"  [OCR] 检测到图片 PDF，开始自动识别：{os.path.basename(filepath)}")

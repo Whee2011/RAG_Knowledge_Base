@@ -56,11 +56,22 @@ class LMStudioEmbeddings:
         """ChromaDB 调用接口"""
         return self.embed_documents(input)
     
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(self, texts: List[str], max_retries: int = 2) -> List[List[float]]:
+        """批量嵌入文档，单条失败时自动重试，仍然失败则抛出异常"""
         embeddings = []
-        for text in texts:
-            result = self._embed(text)
-            embeddings.append(result)
+        for i, text in enumerate(texts):
+            last_error = None
+            for attempt in range(max_retries + 1):
+                try:
+                    result = self._embed(text)
+                    embeddings.append(result)
+                    break
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries:
+                        print(f"[Warning] 第 {i+1}/{len(texts)} 条文本 Embedding 失败（尝试 {attempt+1}/{max_retries+1}）：{e}，正在重试...")
+                    else:
+                        raise Exception(f"第 {i+1}/{len(texts)} 条文本 Embedding 失败，已重试 {max_retries} 次：{last_error}") from last_error
         return embeddings
     
     def embed_query(self, text: str) -> List[float]:

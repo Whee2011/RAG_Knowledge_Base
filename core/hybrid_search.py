@@ -120,13 +120,21 @@ class HybridSearch:
         # 1. 向量检索（扩大范围）
         vector_top_k = min(top_k * 3, 20)
         vector_results = self._vector_search(query, vector_top_k)
-        
+
+        # 将向量距离（越小越好）归一化为正向分数（越大越好）
+        if vector_results.get('scores'):
+            vector_results['scores'] = self._normalize_scores(vector_results['scores'], reverse=True)
+
         # 2. BM25 关键词检索
         bm25_results = self._bm25_search(query, top_k * 3)
-        
+
+        # 将 BM25 分数（越大越好）归一化为 0-1 区间
+        if bm25_results.get('scores'):
+            bm25_results['scores'] = self._normalize_scores(bm25_results['scores'], reverse=False)
+
         # 3. 分数融合 (RRF - Reciprocal Rank Fusion)
         fused_results = self._fuse_results(vector_results, bm25_results, top_k)
-        
+
         return fused_results
     
     def _vector_search(self, query: str, top_k: int = 5) -> Dict[str, Any]:

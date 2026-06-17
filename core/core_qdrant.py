@@ -76,7 +76,7 @@ class LMStudioEmbeddings:
             headers = {}
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
-            
+
             response = requests.post(
                 f"{self.base_url}/v1/embeddings",
                 json=payload,
@@ -85,12 +85,33 @@ class LMStudioEmbeddings:
             )
             if response.status_code == 200:
                 result = response.json()
-                return result.get("data", [{}])[0].get("embedding", [])
+                embedding = result.get("data", [{}])[0].get("embedding", [])
+                if not embedding:
+                    raise Exception("LM Studio 返回空 Embedding")
+                return embedding
             else:
                 raise Exception(f"LM Studio Embedding 失败：{response.status_code}")
         except Exception as e:
             print(f"[Error] Embedding 错误：{e}")
-            return [0.0] * self.dimension
+            raise
+
+    def embed_documents(self, texts: List[str], max_retries: int = 2) -> List[List[float]]:
+        """批量嵌入文档，单条失败时自动重试"""
+        embeddings = []
+        for i, text in enumerate(texts):
+            last_error = None
+            for attempt in range(max_retries + 1):
+                try:
+                    result = self._embed(text)
+                    embeddings.append(result)
+                    break
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries:
+                        print(f"[Warning] 第 {i+1}/{len(texts)} 条文本 Embedding 失败（尝试 {attempt+1}/{max_retries+1}）：{e}，正在重试...")
+                    else:
+                        raise Exception(f"第 {i+1}/{len(texts)} 条文本 Embedding 失败，已重试 {max_retries} 次：{last_error}") from last_error
+        return embeddings
 
 
 class KnowledgeBase:
@@ -162,14 +183,19 @@ class KnowledgeBase:
     
     def _chunk_text(self, text: str) -> List[str]:
         """文本分块"""
+        # 防止错误配置导致无限循环
+        if self.chunk_overlap >= self.chunk_size:
+            print(f"[WARN] chunk_overlap({self.chunk_overlap}) >= chunk_size({self.chunk_size})，自动调整 chunk_overlap")
+            self.chunk_overlap = max(0, self.chunk_size // 4)
+
         chunks = []
         start = 0
         text_length = len(text)
-        
+
         while start < text_length:
-            end = start + self.chunk_size
+            end = min(start + self.chunk_size, text_length)
             chunk = text[start:end]
-            
+
             # 如果不是最后一块，尝试在句子边界处分割
             if end < text_length:
                 # 寻找最近的句子结束符
@@ -178,10 +204,12 @@ class KnowledgeBase:
                     if last_sep > self.chunk_size // 2:
                         chunk = chunk[:last_sep + 1]
                         break
-            
+
             chunks.append(chunk.strip())
-            start = end - self.chunk_overlap
-        
+            # 确保每次至少前进 1 个字符
+            next_start = end - self.chunk_overlap if end < text_length else text_length
+            start = max(next_start, start + 1)
+
         return chunks
     
     def _load_pdf(self, filepath: str) -> str:
