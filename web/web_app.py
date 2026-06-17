@@ -319,13 +319,20 @@ def api_files():
             for filename in filenames:
                 filepath = os.path.join(root, filename)
                 rel_path = os.path.relpath(filepath, DOCUMENTS_PATH)
+
+                # 路径安全检查：确保文件仍在 DOCUMENTS_PATH 内（Windows 不区分大小写）
+                norm_full = os.path.normpath(filepath).lower()
+                norm_doc = os.path.normpath(DOCUMENTS_PATH).lower()
+                if not norm_full.startswith(norm_doc):
+                    continue
+
                 # 转换为正斜杠（Web 标准），避免 JavaScript 反斜杠转义问题
                 rel_path = rel_path.replace('\\', '/')
-                
+
                 # 跳过 OCR 生成的临时文件
                 if filename.endswith('_ocr.txt'):
                     continue
-                
+
                 files.append({
                     'name': filename,
                     'path': rel_path,

@@ -57,63 +57,36 @@ class LMStudioEmbeddings:
         """ChromaDB 调用接口"""
         return self.embed_documents(input)
     
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        embeddings = []
-        for text in texts:
-            result = self._embed(text)
-            embeddings.append(result)
-        return embeddings
-    
-    def embed_query(self, text: str) -> List[float]:
-        return self._embed(text)
-    
-    def _embed(self, text: str) -> List[float]:
-        try:
-            payload = {
-                "model": self.model,
-                "input": text,
-                "encoding_format": "float"
-            }
-            # 构建 headers，支持 API Key 认证
-            headers = {}
-            if self.api_key:
-                headers["Authorization"] = f"Bearer {self.api_key}"
-
-            response = requests.post(
-                f"{self.base_url}/v1/embeddings",
-                json=payload,
-                headers=headers,
-                timeout=60
-            )
-            if response.status_code == 200:
-                result = response.json()
-                embedding = result.get("data", [{}])[0].get("embedding", [])
-                if not embedding:
-                    raise Exception("LM Studio 返回空 Embedding")
-                return embedding
-            else:
-                raise Exception(f"LM Studio Embedding 失败：{response.status_code}")
-        except Exception as e:
-            print(f"[Error] Embedding 错误：{e}")
-            raise
+    def _embed_with_retry(self, text: str, max_retries: int = 2, label: str = "") -> List[float]:
+        """带重试的单个文本嵌入"""
+        last_error = None
+        prefix = f"{label} " if label else ""
+        for attempt in range(max_retries + 1):
+            try:
+                return self._embed(text)
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    print(f"[Warning] {prefix}Embedding 失败（尝试 {attempt+1}/{max_retries+1}）：{e}，正在重试...")
+                else:
+                    raise last_error
+        raise last_error
 
     def embed_documents(self, texts: List[str], max_retries: int = 2) -> List[List[float]]:
-        """批量嵌入文档，单条失败时自动重试"""
+        """批量嵌入文档，单条失败时自动重试，仍然失败则抛出异常"""
         embeddings = []
         for i, text in enumerate(texts):
-            last_error = None
-            for attempt in range(max_retries + 1):
-                try:
-                    result = self._embed(text)
-                    embeddings.append(result)
-                    break
-                except Exception as e:
-                    last_error = e
-                    if attempt < max_retries:
-                        print(f"[Warning] 第 {i+1}/{len(texts)} 条文本 Embedding 失败（尝试 {attempt+1}/{max_retries+1}）：{e}，正在重试...")
-                    else:
-                        raise Exception(f"第 {i+1}/{len(texts)} 条文本 Embedding 失败，已重试 {max_retries} 次：{last_error}") from last_error
+            try:
+                label = f"第 {i+1}/{len(texts)} 条文本"
+                result = self._embed_with_retry(text, max_retries=max_retries, label=label)
+                embeddings.append(result)
+            except Exception as e:
+                raise Exception(f"第 {i+1}/{len(texts)} 条文本 Embedding 失败，已重试 {max_retries} 次：{e}") from e
         return embeddings
+
+    def embed_query(self, text: str, max_retries: int = 2) -> List[float]:
+        """嵌入查询文本，失败时自动重试"""
+        return self._embed_with_retry(text, max_retries=max_retries, label="查询")
 
 
 class KnowledgeBase:

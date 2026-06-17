@@ -1,5 +1,8 @@
 """
 RAG Core - Qdrant 版本 (LM Studio 后端，Qdrant 向量库)
+
+注意：此文件为历史备用实现，项目主入口为 core/core.py。
+当前版本已同步 OCR 路径安全和 Embedding 重试等关键修复。
 """
 import os
 import sys
@@ -55,63 +58,36 @@ class LMStudioEmbeddings:
         self.api_key = api_key
         self.dimension = 2560  # Qwen3-Embedding-4B 输出维度
     
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        embeddings = []
-        for text in texts:
-            result = self._embed(text)
-            embeddings.append(result)
-        return embeddings
-    
-    def embed_query(self, text: str) -> List[float]:
-        return self._embed(text)
-    
-    def _embed(self, text: str) -> List[float]:
-        try:
-            payload = {
-                "model": self.model,
-                "input": text,
-                "encoding_format": "float"
-            }
-            # 构建 headers，支持 API Key 认证
-            headers = {}
-            if self.api_key:
-                headers["Authorization"] = f"Bearer {self.api_key}"
-
-            response = requests.post(
-                f"{self.base_url}/v1/embeddings",
-                json=payload,
-                headers=headers,
-                timeout=60
-            )
-            if response.status_code == 200:
-                result = response.json()
-                embedding = result.get("data", [{}])[0].get("embedding", [])
-                if not embedding:
-                    raise Exception("LM Studio 返回空 Embedding")
-                return embedding
-            else:
-                raise Exception(f"LM Studio Embedding 失败：{response.status_code}")
-        except Exception as e:
-            print(f"[Error] Embedding 错误：{e}")
-            raise
+    def _embed_with_retry(self, text: str, max_retries: int = 2, label: str = "") -> List[float]:
+        """带重试的单个文本嵌入"""
+        last_error = None
+        prefix = f"{label} " if label else ""
+        for attempt in range(max_retries + 1):
+            try:
+                return self._embed(text)
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    print(f"[Warning] {prefix}Embedding 失败（尝试 {attempt+1}/{max_retries+1}）：{e}，正在重试...")
+                else:
+                    raise last_error
+        raise last_error
 
     def embed_documents(self, texts: List[str], max_retries: int = 2) -> List[List[float]]:
-        """批量嵌入文档，单条失败时自动重试"""
+        """批量嵌入文档，单条失败时自动重试，仍然失败则抛出异常"""
         embeddings = []
         for i, text in enumerate(texts):
-            last_error = None
-            for attempt in range(max_retries + 1):
-                try:
-                    result = self._embed(text)
-                    embeddings.append(result)
-                    break
-                except Exception as e:
-                    last_error = e
-                    if attempt < max_retries:
-                        print(f"[Warning] 第 {i+1}/{len(texts)} 条文本 Embedding 失败（尝试 {attempt+1}/{max_retries+1}）：{e}，正在重试...")
-                    else:
-                        raise Exception(f"第 {i+1}/{len(texts)} 条文本 Embedding 失败，已重试 {max_retries} 次：{last_error}") from last_error
+            try:
+                label = f"第 {i+1}/{len(texts)} 条文本"
+                result = self._embed_with_retry(text, max_retries=max_retries, label=label)
+                embeddings.append(result)
+            except Exception as e:
+                raise Exception(f"第 {i+1}/{len(texts)} 条文本 Embedding 失败，已重试 {max_retries} 次：{e}") from e
         return embeddings
+
+    def embed_query(self, text: str, max_retries: int = 2) -> List[float]:
+        """嵌入查询文本，失败时自动重试"""
+        return self._embed_with_retry(text, max_retries=max_retries, label="查询")
 
 
 class KnowledgeBase:
@@ -214,12 +190,12 @@ class KnowledgeBase:
     
     def _load_pdf(self, filepath: str) -> str:
         """读取 PDF 文件（优先读取 OCR 文本）"""
-        # 优先检查 OCR 文本文件
-        ocr_txt_path = filepath.replace('.pdf', '_ocr.txt')
+        # 优先检查 OCR 文本文件（使用与扩展名无关的安全路径）
+        ocr_txt_path = self._get_ocr_txt_path(filepath)
         if os.path.exists(ocr_txt_path):
             with open(ocr_txt_path, 'r', encoding='utf-8') as f:
                 return f.read()
-        
+
         # 否则直接读取 PDF 文本
         text = ""
         try:
@@ -229,7 +205,70 @@ class KnowledgeBase:
         except Exception as e:
             print(f"[Warning] 读取 PDF 失败 {filepath}: {e}")
         return text
-    
+
+    def _get_ocr_txt_path(self, filepath: str) -> str:
+        """根据原文件路径生成对应的 OCR 文本文件路径（不区分大小写扩展名）"""
+        base, _ = os.path.splitext(filepath)
+        return base + '_ocr.txt'
+
+    def _detect_need_ocr(self, filepath: str) -> bool:
+        """检测 PDF 文件是否需要 OCR 处理"""
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext == '.pdf':
+            try:
+                doc = pymupdf.open(filepath)
+                total_text = ""
+                # 检查前 3 页（如果页数不足则检查全部），避免封面导致的误判
+                pages_to_check = min(3, len(doc))
+                for page_idx in range(pages_to_check):
+                    total_text += doc[page_idx].get_text()
+                doc.close()
+
+                # 如果检查页的文字总量很少，判定为图片 PDF
+                if not total_text.strip() or len(total_text.strip()) < 100:
+                    return True
+            except Exception as e:
+                print(f"  [WARN] 检测 PDF 失败：{e}")
+                return False
+        return False
+
+    def _auto_ocr(self, filepath: str) -> str:
+        """自动对 PDF 文件进行 OCR 处理
+
+        Returns:
+            OCR 文本文件路径，如果不需要 OCR 或处理失败则返回原路径
+        """
+        ext = os.path.splitext(filepath)[1].lower()
+        ocr_txt = self._get_ocr_txt_path(filepath)
+        if os.path.exists(ocr_txt):
+            print(f"  [OCR] 已有 OCR 文件：{os.path.basename(ocr_txt)}")
+            return ocr_txt
+
+        if self._detect_need_ocr(filepath):
+            print(f"  [OCR] 检测到图片 PDF，开始自动识别：{os.path.basename(filepath)}")
+            if ext == '.pdf':
+                try:
+                    CORE_DIR = os.path.dirname(os.path.abspath(__file__))
+                    INSTALL_DIR = os.path.dirname(CORE_DIR)
+                    TOOLS_DIR = os.path.join(INSTALL_DIR, "tools")
+                    if TOOLS_DIR not in sys.path:
+                        sys.path.insert(0, TOOLS_DIR)
+                    from ocr_simple import ocr_pdf
+
+                    ocr_output = ocr_pdf(filepath)
+
+                    if ocr_output:
+                        print(f"  [OCR] ✅ 识别完成：{os.path.basename(ocr_output)}")
+                        return ocr_output
+                    else:
+                        print(f"  [OCR] ⚠️ 识别失败，使用原文档")
+                        return filepath
+                except Exception as e:
+                    print(f"  [OCR] ⚠️ OCR 处理失败：{e}，使用原文档")
+                    return filepath
+
+        return filepath
+
     def _load_docx(self, filepath: str) -> str:
         """读取 Word 文档"""
         try:
@@ -361,21 +400,33 @@ class KnowledgeBase:
                 if not force and doc_id in self._doc_cache:
                     print(f"[SKIP] {filename}")
                     continue
-                
+
+                # 自动 OCR 处理（仅图片 PDF 会生成独立的 _ocr.txt 文件）
+                if auto_ocr:
+                    processed_path = self._auto_ocr(filepath)
+                    if processed_path != filepath:
+                        filepath = processed_path
+                        filename = os.path.basename(filepath)
+                        doc_id = self._generate_doc_id(filepath)
+
                 # 加载文档
                 print(f"[LOAD] {filename}")
                 content = self._load_document(filepath)
-                
+
                 if not content:
                     print(f"[WARN] 文档内容为空：{filename}")
                     continue
-                
+
                 # 分块
                 chunks = self._chunk_text(content)
                 print(f"[CHUNK] {filename}: {len(chunks)} 块")
-                
+
                 # 生成向量
-                embeddings = self.embeddings.embed_documents(chunks)
+                try:
+                    embeddings = self.embeddings.embed_documents(chunks)
+                except Exception as e:
+                    print(f"[WARN] 嵌入失败，跳过文件 {filename}: {e}")
+                    continue
                 
                 # 准备 Qdrant Points
                 points = []

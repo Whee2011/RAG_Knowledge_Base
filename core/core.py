@@ -56,26 +56,36 @@ class LMStudioEmbeddings:
         """ChromaDB 调用接口"""
         return self.embed_documents(input)
     
+    def _embed_with_retry(self, text: str, max_retries: int = 2, label: str = "") -> List[float]:
+        """带重试的单个文本嵌入"""
+        last_error = None
+        prefix = f"{label} " if label else ""
+        for attempt in range(max_retries + 1):
+            try:
+                return self._embed(text)
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    print(f"[Warning] {prefix}Embedding 失败（尝试 {attempt+1}/{max_retries+1}）：{e}，正在重试...")
+                else:
+                    raise last_error
+        raise last_error
+
     def embed_documents(self, texts: List[str], max_retries: int = 2) -> List[List[float]]:
         """批量嵌入文档，单条失败时自动重试，仍然失败则抛出异常"""
         embeddings = []
         for i, text in enumerate(texts):
-            last_error = None
-            for attempt in range(max_retries + 1):
-                try:
-                    result = self._embed(text)
-                    embeddings.append(result)
-                    break
-                except Exception as e:
-                    last_error = e
-                    if attempt < max_retries:
-                        print(f"[Warning] 第 {i+1}/{len(texts)} 条文本 Embedding 失败（尝试 {attempt+1}/{max_retries+1}）：{e}，正在重试...")
-                    else:
-                        raise Exception(f"第 {i+1}/{len(texts)} 条文本 Embedding 失败，已重试 {max_retries} 次：{last_error}") from last_error
+            try:
+                label = f"第 {i+1}/{len(texts)} 条文本"
+                result = self._embed_with_retry(text, max_retries=max_retries, label=label)
+                embeddings.append(result)
+            except Exception as e:
+                raise Exception(f"第 {i+1}/{len(texts)} 条文本 Embedding 失败，已重试 {max_retries} 次：{e}") from e
         return embeddings
-    
-    def embed_query(self, text: str) -> List[float]:
-        return self._embed(text)
+
+    def embed_query(self, text: str, max_retries: int = 2) -> List[float]:
+        """嵌入查询文本，失败时自动重试"""
+        return self._embed_with_retry(text, max_retries=max_retries, label="查询")
     
     def _embed(self, text: str) -> List[float]:
         try:
@@ -644,11 +654,9 @@ class KnowledgeBase:
             print("  [OK] 文档已是最新")
             return
         
-        # 加载并分块文档
-        all_chunks = []
-        all_ids = []
-        all_metadatas = []
-        
+        # 加载并分块文档（按文件分组，单文件嵌入失败可跳过）
+        doc_records = []
+
         for filepath in to_index:
             # 根据文件类型加载
             text = self._load_document(filepath)
@@ -668,42 +676,65 @@ class KnowledgeBase:
                 continue
 
             chunks = self._split_text(text)
-            for i, chunk in enumerate(chunks):
-                chunk_id = f"{filepath}_{i}"
-                all_chunks.append(chunk)
-                all_ids.append(chunk_id)
-                all_metadatas.append({
-                    "source": os.path.relpath(filepath, self.documents_path),
-                    "filepath": filepath,
-                    "hash": self._get_file_hash(filepath)
-                })
-        
-        # 批量嵌入并添加
-        if all_chunks:
-            print(f"  正在嵌入 {len(all_chunks)} 个文本块...")
-            embeddings = self.embeddings.embed_documents(all_chunks)
-            
-            self.collection.add(
-                documents=all_chunks,
-                embeddings=embeddings,
-                ids=all_ids,
-                metadatas=all_metadatas
-            )
-            
-            # 更新 metadata
-            for filepath in to_index:
-                indexed[filepath] = self._get_file_hash(filepath)
-            metadata["documents"] = indexed
-            metadata["last_updated"] = datetime.now().isoformat()
-            self._save_metadata(metadata)
-            
+            if not chunks:
+                print(f"  [SKIP] {os.path.basename(filepath)} (无有效文本块)")
+                continue
+
+            ids = [f"{filepath}_{i}" for i in range(len(chunks))]
+            metadatas = [{
+                "source": os.path.relpath(filepath, self.documents_path),
+                "filepath": filepath,
+                "hash": self._get_file_hash(filepath)
+            } for _ in chunks]
+
+            doc_records.append({
+                "filepath": filepath,
+                "chunks": chunks,
+                "ids": ids,
+                "metadatas": metadatas
+            })
+
+        # 逐个文件嵌入并添加，避免单文件失败导致整批索引崩溃
+        successful_files = []
+        failed_files = []
+        total_chunks = 0
+        if doc_records:
+            print(f"  正在嵌入 {sum(len(r['chunks']) for r in doc_records)} 个文本块（来自 {len(doc_records)} 个文件）...")
+            for record in doc_records:
+                try:
+                    embeddings = self.embeddings.embed_documents(record["chunks"])
+                    self.collection.add(
+                        documents=record["chunks"],
+                        embeddings=embeddings,
+                        ids=record["ids"],
+                        metadatas=record["metadatas"]
+                    )
+                    successful_files.append(record["filepath"])
+                    total_chunks += len(record["chunks"])
+                except Exception as e:
+                    failed_files.append((record["filepath"], str(e)))
+                    print(f"  [Warning] 嵌入失败，跳过文件 {os.path.basename(record['filepath'])}: {e}")
+
+            # 更新 metadata（仅成功文件）
+            if successful_files:
+                for filepath in successful_files:
+                    indexed[filepath] = self._get_file_hash(filepath)
+                metadata["documents"] = indexed
+                metadata["last_updated"] = datetime.now().isoformat()
+                self._save_metadata(metadata)
+
             # 输出 OCR 统计
             if ocr_processed:
                 print(f"\n  [OCR] 本次自动处理 {len(ocr_processed)} 个文件:")
                 for orig, ocr_file in ocr_processed:
                     print(f"    • {os.path.basename(orig)} → {os.path.basename(ocr_file)}")
-            
-            print(f"  [OK] 已索引 {len(to_index)} 个文件，{len(all_chunks)} 个文本块")
+
+            if failed_files:
+                print(f"  [WARN] {len(failed_files)} 个文件因 Embedding 失败被跳过:")
+                for filepath, err in failed_files:
+                    print(f"    • {os.path.basename(filepath)}: {err}")
+
+            print(f"  [OK] 已索引 {len(successful_files)} 个文件，{total_chunks} 个文本块")
     
     def get_status(self) -> IndexStatus:
         """获取索引状态"""
