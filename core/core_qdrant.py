@@ -297,11 +297,10 @@ class KnowledgeBase:
         """生成文档 ID（字符串，用于缓存和追踪）"""
         return hashlib.md5(filepath.encode()).hexdigest()
     
-    def _generate_point_id(self, doc_id: str, chunk_idx: int) -> int:
-        """生成 Qdrant 点 ID（整数）"""
-        # 使用 doc_id 的哈希值 + chunk_idx 生成唯一整数 ID
-        doc_hash = int(hashlib.md5(doc_id.encode()).hexdigest()[:8], 16)
-        return (doc_hash * 1000 + chunk_idx) % (2**63 - 1)  # 确保在 64 位整数范围内
+    def _generate_point_id(self, doc_id: str, chunk_idx: int) -> str:
+        """生成 Qdrant 点 ID（字符串 UUID 形式，避免整数溢出和冲突）"""
+        # 使用 doc_id + chunk_idx 的 MD5 哈希作为唯一 ID
+        return hashlib.md5(f"{doc_id}_{chunk_idx}".encode()).hexdigest()
     
     def refresh_index(self, force: bool = False, auto_ocr: bool = True):
         """刷新索引"""

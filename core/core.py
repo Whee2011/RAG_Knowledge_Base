@@ -86,12 +86,15 @@ class LMStudioEmbeddings:
             )
             if response.status_code == 200:
                 result = response.json()
-                return result.get("data", [{}])[0].get("embedding", [])
+                embedding = result.get("data", [{}])[0].get("embedding", [])
+                if not embedding:
+                    raise Exception("LM Studio 返回空 Embedding")
+                return embedding
             else:
                 raise Exception(f"LM Studio Embedding 失败：{response.status_code}")
         except Exception as e:
             print(f"[Error] Embedding 错误：{e}")
-            return [0.0] * 2560
+            raise
 
 
 class KnowledgeBase:
@@ -375,20 +378,28 @@ class KnowledgeBase:
     
     def _split_text(self, text: str) -> List[str]:
         """简单文本分块"""
+        # 防止错误配置导致无限循环
+        if self.chunk_overlap >= self.chunk_size:
+            print(f"[WARN] chunk_overlap({self.chunk_overlap}) >= chunk_size({self.chunk_size})，自动调整 chunk_overlap")
+            self.chunk_overlap = max(0, self.chunk_size // 4)
+
         chunks = []
         start = 0
-        while start < len(text):
-            end = start + self.chunk_size
+        text_len = len(text)
+        while start < text_len:
+            end = min(start + self.chunk_size, text_len)
             chunk = text[start:end]
             # 尝试在句子边界切断
-            if end < len(text):
+            if end < text_len:
                 for sep in ["\n\n", "\n", "。", "！", "？"]:
                     pos = chunk.rfind(sep)
                     if pos > self.chunk_size // 2:
                         chunk = chunk[:pos + len(sep)]
                         break
             chunks.append(chunk.strip())
-            start = end - self.chunk_overlap if end < len(text) else len(text)
+            # 确保每次至少前进 1 个字符，避免 chunk_overlap >= chunk_size 时死循环
+            next_start = end - self.chunk_overlap if end < text_len else text_len
+            start = max(next_start, start + 1)
         return chunks
     
     def _scan_documents(self) -> List[str]:
@@ -416,8 +427,8 @@ class KnowledgeBase:
                 
                 # 优先使用 OCR 文本文件（如果有）
                 if ext.lower() == '.pdf':
-                    # 检查是否有对应的 OCR 文本文件
-                    ocr_txt = filepath.replace('.pdf', '_ocr.txt').replace('.PDF', '_ocr.txt')
+                    # 检查是否有对应的 OCR 文本文件（使用与扩展名无关的路径）
+                    ocr_txt = self._get_ocr_txt_path(filepath)
                     if os.path.exists(ocr_txt):
                         documents.append(ocr_txt)  # 使用 OCR 文本
                         continue
@@ -443,11 +454,15 @@ class KnowledgeBase:
         if ext == '.pdf':
             try:
                 doc = pymupdf.open(filepath)
-                text = doc[0].get_text()
+                total_text = ""
+                # 检查前 3 页（如果页数不足则检查全部），避免封面导致的误判
+                pages_to_check = min(3, len(doc))
+                for page_idx in range(pages_to_check):
+                    total_text += doc[page_idx].get_text()
                 doc.close()
-                
-                # 如果第一页文字很少，判定为图片 PDF
-                if not text.strip() or len(text.strip()) < 50:
+
+                # 如果检查页的文字总量很少，判定为图片 PDF
+                if not total_text.strip() or len(total_text.strip()) < 100:
                     return True
             except Exception as e:
                 print(f"  [WARN] 检测 PDF 失败：{e}")
@@ -486,39 +501,29 @@ class KnowledgeBase:
         
         return False
     
+    def _get_ocr_txt_path(self, filepath: str) -> str:
+        """根据原文件路径生成对应的 OCR 文本文件路径（不区分大小写扩展名）"""
+        base, _ = os.path.splitext(filepath)
+        return base + '_ocr.txt'
+
     def _auto_ocr(self, filepath: str) -> str:
         """自动对文件进行 OCR 处理
-        
+
         Returns:
             OCR 文本文件路径，如果不需要 OCR 则返回原路径
         """
         ext = os.path.splitext(filepath)[1].lower()
-        
-        # 检查是否已有 OCR 文件（PDF）
-        if ext == '.pdf':
-            ocr_txt = filepath.replace('.pdf', '_ocr.txt').replace('.PDF', '_ocr.txt')
-            if os.path.exists(ocr_txt):
-                print(f"  [OCR] 已有 OCR 文件：{os.path.basename(ocr_txt)}")
-                return ocr_txt
-        
-        # 检查是否已有 OCR 文件（Word）
-        if ext in ['.docx', '.doc']:
-            ocr_txt = filepath.replace('.docx', '_ocr.txt').replace('.doc', '_ocr.txt')
-            if os.path.exists(ocr_txt):
-                print(f"  [OCR] 已有 OCR 文件：{os.path.basename(ocr_txt)}")
-                return ocr_txt
-        
-        # 检查是否已有 OCR 文件（PPT）
-        if ext in ['.pptx', '.ppt']:
-            ocr_txt = filepath.replace('.pptx', '_ocr.txt').replace('.ppt', '_ocr.txt')
-            if os.path.exists(ocr_txt):
-                print(f"  [OCR] 已有 OCR 文件：{os.path.basename(ocr_txt)}")
-                return ocr_txt
-        
+
+        # 检查是否已有 OCR 文件
+        ocr_txt = self._get_ocr_txt_path(filepath)
+        if os.path.exists(ocr_txt):
+            print(f"  [OCR] 已有 OCR 文件：{os.path.basename(ocr_txt)}")
+            return ocr_txt
+
         # 检测是否需要 OCR
         if self._detect_need_ocr(filepath):
             print(f"  [OCR] 检测到图片文档，开始自动识别：{os.path.basename(filepath)}")
-            
+
             # PDF 文件使用 ocr_simple 处理
             if ext == '.pdf':
                 try:
@@ -530,26 +535,26 @@ class KnowledgeBase:
                     if TOOLS_DIR not in sys.path:
                         sys.path.insert(0, TOOLS_DIR)
                     from ocr_simple import ocr_pdf
-                    
+
                     ocr_output = ocr_pdf(filepath)
-                    
+
                     if ocr_output:
                         print(f"  [OCR] ✅ 识别完成：{os.path.basename(ocr_output)}")
                         return ocr_output
                     else:
                         print(f"  [OCR] ⚠️ 识别失败，使用原文档")
                         return filepath
-                        
+
                 except Exception as e:
                     print(f"  [OCR] ⚠️ OCR 处理失败：{e}，使用原文档")
                     return filepath
-            
+
             # Word 和 PPT 文档不需要生成独立的 OCR 文件
             # OCR 处理在 _load_docx 和 _load_pptx 中进行
             # 这里只返回原路径，表示需要 OCR 但已标记
             print(f"  [OCR] ℹ️  文档包含图片，将在读取时自动 OCR")
             return filepath
-        
+
         return filepath
     
     def add_documents(self, force: bool = False, auto_ocr: bool = True):

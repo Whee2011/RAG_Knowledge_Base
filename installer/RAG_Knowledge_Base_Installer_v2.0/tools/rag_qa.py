@@ -16,17 +16,20 @@ print("RAG Q&A - Knowledge Base")
 print("=" * 60)
 
 # Config
-DOC_PATH = r"D:\RAG_Knowledge_Base\documents\pdf\附件 1：中国移动云化核心网建设指导意见（2021 版）.pdf"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+INSTALL_DIR = os.path.dirname(SCRIPT_DIR)
+DOC_DIR = os.path.join(INSTALL_DIR, "documents", "pdf")
+
+DOC_PATH = os.path.join(DOC_DIR, "附件 1：中国移动云化核心网建设指导意见（2021 版）.pdf")
 # Alternative path if Chinese chars cause issues
-import glob
-pdf_files = glob.glob(r"D:\RAG_Knowledge_Base\documents\pdf\*.pdf")
+pdf_files = glob.glob(os.path.join(DOC_DIR, "*.pdf"))
 print(f"Found PDF files: {pdf_files}")
 DOC_PATH = [f for f in pdf_files if "中国移动" in f or "云化" in f][0] if pdf_files else DOC_PATH
 print(f"Using: {DOC_PATH}")
 COLLECTION_NAME = "knowledge_base_docs"
 OLLAMA_MODEL = "qwen3.5:4b"
 EMBED_MODEL = "nomic-embed-text"
-DB_PATH = r"./chroma_kb_db"
+DB_PATH = os.path.join(INSTALL_DIR, "chroma_kb_db")
 
 # Step 1: Read PDF
 print("\n[Step 1/5] Reading PDF...")

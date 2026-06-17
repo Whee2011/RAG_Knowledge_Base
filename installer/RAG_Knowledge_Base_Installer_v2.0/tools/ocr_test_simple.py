@@ -15,8 +15,13 @@ print("Initializing OCR...")
 ocr = PaddleOCR(use_textline_orientation=True, lang='ch')
 print("OCR initialized.")
 
+# 动态路径：脚本位于 tools/，项目根目录为父目录
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+INSTALL_DIR = os.path.dirname(SCRIPT_DIR)
+PDF_DIR = os.path.join(INSTALL_DIR, "documents", "pdf")
+
 # 测试梅西.pdf
-pdf_path = r"D:\RAG_Knowledge_Base\documents\pdf\梅西.pdf"
+pdf_path = os.path.join(PDF_DIR, "梅西.pdf")
 print(f"\nProcessing: {pdf_path}")
 
 # 检查是否需要 OCR

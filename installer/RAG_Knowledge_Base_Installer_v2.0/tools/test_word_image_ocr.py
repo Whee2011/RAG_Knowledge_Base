@@ -6,8 +6,13 @@
 import sys
 import os
 
-# 添加核心代码路径
-sys.path.insert(0, r"D:\RAG_Knowledge_Base\core")
+# 动态路径：脚本位于 tools/，项目根目录为父目录
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+INSTALL_DIR = os.path.dirname(SCRIPT_DIR)
+CORE_DIR = os.path.join(INSTALL_DIR, "core")
+DOCUMENTS_PATH = os.path.join(INSTALL_DIR, "documents")
+
+sys.path.insert(0, CORE_DIR)
 
 from core import KnowledgeBase
 
@@ -20,10 +25,10 @@ def test_word_image_ocr():
     print()
     
     # 创建知识库实例
-    kb = KnowledgeBase(documents_path=r"D:\RAG_Knowledge_Base\documents")
-    
+    kb = KnowledgeBase(documents_path=DOCUMENTS_PATH)
+
     # 测试 Word 文件路径
-    test_word_path = r"D:\RAG_Knowledge_Base\documents\docx\测试图片.docx"
+    test_word_path = os.path.join(DOCUMENTS_PATH, "docx", "测试图片.docx")
     
     if not os.path.exists(test_word_path):
         print(f"❌ 测试文件不存在：{test_word_path}")

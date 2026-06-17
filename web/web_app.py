@@ -25,6 +25,9 @@ from core import KnowledgeBase
 
 app = Flask(__name__)
 
+# 限制上传文件大小为 500MB
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+
 # 加载 .env 配置（动态路径）
 load_dotenv(os.path.join(INSTALL_DIR, "config", ".env"))
 
@@ -46,6 +49,16 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # 全局知识库实例（单例模式）
 kb_instance = None
+
+
+def secure_document_path(filepath: str) -> str:
+    """验证并返回安全的文档路径，防止路径遍历攻击"""
+    full_path = os.path.normpath(os.path.join(DOCUMENTS_PATH, filepath))
+    normalized_doc_path = os.path.normpath(DOCUMENTS_PATH)
+    if not full_path.startswith(normalized_doc_path):
+        raise ValueError('非法路径')
+    return full_path
+
 
 def get_kb():
     """获取知识库实例"""
@@ -347,26 +360,33 @@ def api_delete():
                 'error': '文件路径不能为空'
             }), 400
         
-        full_path = os.path.join(DOCUMENTS_PATH, filepath)
-        
+        try:
+            full_path = secure_document_path(filepath)
+        except ValueError as e:
+            return jsonify({
+                'success': False,
+                'error': '非法路径'
+            }), 400
+
         if not os.path.exists(full_path):
             return jsonify({
                 'success': False,
                 'error': '文件不存在'
             }), 404
-        
+
         # 删除文件
         os.remove(full_path)
-        
+
         # 删除对应的 OCR 文件（如果有）
-        ocr_path = full_path.replace('.pdf', '_ocr.txt')
+        base, _ = os.path.splitext(full_path)
+        ocr_path = base + '_ocr.txt'
         if os.path.exists(ocr_path):
             os.remove(ocr_path)
-        
+
         # 刷新索引
         kb = get_kb()
         kb.add_documents(force=True)
-        
+
         return jsonify({
             'success': True,
             'message': f'文件已删除：{filepath}'
@@ -381,8 +401,14 @@ def api_delete():
 def api_ocr_file(filepath):
     """对指定文件进行 OCR"""
     try:
-        full_path = os.path.join(DOCUMENTS_PATH, filepath)
-        
+        try:
+            full_path = secure_document_path(filepath)
+        except ValueError as e:
+            return jsonify({
+                'success': False,
+                'error': '非法路径'
+            }), 400
+
         if not os.path.exists(full_path):
             return jsonify({
                 'success': False,
@@ -393,10 +419,13 @@ def api_ocr_file(filepath):
         
         # 检测是否需要 OCR
         if kb._detect_need_ocr(full_path):
-            # 执行 OCR
-            ocr_txt_path = full_path.replace('.pdf', '_ocr.txt')
-            kb._auto_ocr(full_path, ocr_txt_path)
-            
+            # 执行 OCR（_auto_ocr 会自动生成 _ocr.txt 文件）
+            kb._auto_ocr(full_path)
+
+            # 推断 OCR 输出文件路径
+            base, ext = os.path.splitext(full_path)
+            ocr_txt_path = base + '_ocr.txt'
+
             return jsonify({
                 'success': True,
                 'message': 'OCR 完成',
@@ -426,4 +455,6 @@ if __name__ == '__main__':
     print("=" * 60)
     print()
     
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # 从环境变量或配置读取 debug 模式，默认关闭
+    debug_mode = os.getenv('WEB_DEBUG', 'false').lower() == 'true'
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)

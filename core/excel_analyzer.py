@@ -190,9 +190,12 @@ class ExcelAnalyzer:
                 continue
 
             try:
-                # 尝试将 value 转换为与列相同的类型
-                if pd.api.types.is_numeric_dtype(df[col]):
-                    value = float(value) if '.' in str(value) else int(value)
+                # 对数值列统一使用 pd.to_numeric 转换（可处理千分位、小数等）
+                if pd.api.types.is_numeric_dtype(df[col]) and op != 'contains':
+                    value = pd.to_numeric(str(value).replace(',', ''), errors='coerce')
+                    if pd.isna(value):
+                        print(f"[Warning] 无法将 '{condition.get('value')}' 转换为数值")
+                        continue
 
                 if op == '==':
                     df = df[df[col] == value]

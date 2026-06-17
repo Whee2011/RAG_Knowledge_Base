@@ -24,8 +24,6 @@ def _get_kb(kb_name: str = "default") -> KnowledgeBase:
 
     # 兼容旧版硬编码路径（如果用户仍未迁移）
     legacy_paths = [
-        r"D:\RAG_Knowledge_Base\documents",
-        r"H:\RAG_Knowledge_Base\documents",
         r"C:\Users\Administrator\.copaw\workspaces\default\test_docs"
     ]
 
@@ -100,8 +98,8 @@ def rag_status(kb_name: str = "default") -> str:
         
         if status.documents:
             output += "\n**文档列表:**\n"
-            for doc in status.documents:
-                output += f"  • {doc['path']} ({doc['chunks']} 块)\n"
+            for doc_path in status.documents:
+                output += f"  • {doc_path}\n"
         
         return output
     
@@ -204,9 +202,8 @@ def rag_list_documents(kb_name: str = "default") -> str:
         output = f"📚 **知识库文档列表 ({kb_name})**\n"
         output += "━" * 30 + "\n"
         
-        for i, doc in enumerate(status.documents, 1):
-            output += f"{i}. **{doc['path']}**\n"
-            output += f"   文本块：{doc['chunks']} | 添加时间：{doc.get('added_at', '未知')[:19]}\n"
+        for i, doc_path in enumerate(status.documents, 1):
+            output += f"{i}. **{doc_path}**\n"
         
         return output
     
@@ -231,21 +228,21 @@ def rag_search_by_keyword(keyword: str, top_k: int = 10, kb_name: str = "default
         kb.add_documents()  # 确保索引最新
         
         # 使用语义搜索
-        docs = kb.vectorstore.similarity_search(keyword, k=top_k)
-        
+        docs = kb.search(keyword, top_k=top_k)
+
         if not docs:
             return f"🔍 未找到与 \"{keyword}\" 相关的内容"
-        
+
         output = f"🔍 **搜索结果：\"{keyword}\"**\n"
         output += f"找到 {len(docs)} 个相关片段\n\n"
-        
+
         for i, doc in enumerate(docs, 1):
             source = doc.metadata.get('source', '未知')
             content = doc.page_content[:300].replace('\n', ' ')
             output += f"**[{i}] 来源：** {source}\n"
             output += f"**内容：** {content}...\n\n"
             output += "─" * 30 + "\n"
-        
+
         return output
     
     except Exception as e:
